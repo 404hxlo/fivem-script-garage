@@ -1,0 +1,128 @@
+@CreateThread|both|Threads & timing|Start a function that runs alongside other code (alias of Citizen.CreateThread).|CreateThread(function() while true do Wait(0) end end)|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/Citizen.CreateThread/
+@Wait|both|Threads & timing|Pause the current thread for N milliseconds; Wait(0) waits one frame (alias of Citizen.Wait).|Wait(500)|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/Citizen.Wait/
+@Citizen.SetTimeout|both|Threads & timing|Run a function once after a delay in milliseconds.|Citizen.SetTimeout(5000, function() print('5s later') end)|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/Citizen.SetTimeout/
+GetGameTimer|Threads & timing|Milliseconds since the game/server started. Good for cooldowns and timers.|local now = GetGameTimer()
+@AddEventHandler|both|Events|Listen for an event triggered on the same side.|AddEventHandler('onResourceStart', function(res) end)|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/AddEventHandler/
+@RegisterNetEvent|both|Events|Allow an event to be triggered from the other side, and optionally attach its handler.|RegisterNetEvent('shop:buy', function(item) local src = source end)|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/RegisterNetEvent/
+@TriggerEvent|both|Events|Trigger a local event (same side). Returns true in Lua if a handler canceled it.|TriggerEvent('chat:addMessage', { args = { 'Hi' } })|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/TriggerEvent/
+@TriggerServerEvent|client|Events|Send an event from a client to the server.|TriggerServerEvent('shop:buy', 'water', 2)|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/TriggerServerEvent/
+@TriggerClientEvent|server|Events|Send an event from the server to one player, or -1 for everyone.|TriggerClientEvent('chat:addMessage', src, { args = { 'Hi' } })|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/TriggerClientEvent/
+@TriggerLatentServerEvent|client|Events|Send a large payload to the server gradually (bytes per second).|TriggerLatentServerEvent('log:upload', 0, text)|https://docs.fivem.net/docs/scripting-manual/working-with-events/triggering-events/
+@TriggerLatentClientEvent|server|Events|Send a large payload to a client gradually (bytes per second).|TriggerLatentClientEvent('data:big', src, 50000, tbl)|https://docs.fivem.net/docs/scripting-manual/working-with-events/triggering-events/
+CancelEvent|Events|Cancel the local event being handled (other handlers still run).|CancelEvent()
+WasEventCanceled|Events|Check whether the last local event you triggered was canceled.|if WasEventCanceled() then end
+RegisterCommand|Commands & keys|Create a chat/console command. Third argument true = restricted to the command.name ACE.|RegisterCommand('car', function(source, args) end, false)
+ExecuteCommand|Commands & keys|Run a console command string as if typed.|ExecuteCommand('ensure hello')
+RegisterKeyMapping|Commands & keys|Bind a command to a key players can rebind in Settings > Key Bindings > FiveM.|RegisterKeyMapping('+handsup', 'Hands Up', 'keyboard', 'i')
+IsControlJustPressed|Commands & keys|True on the frame a control was pressed (38 = E). Check every frame.|if IsControlJustPressed(0, 38) then end
+IsControlJustReleased|Commands & keys|True on the frame a control was released.|if IsControlJustReleased(0, 38) then end
+DisableControlAction|Commands & keys|Block a control for this frame (call every frame).|DisableControlAction(0, 24, true) -- attack
+PlayerPedId|Player|The local player's ped (character).|local ped = PlayerPedId()
+PlayerId|Player|The local player's player index.|local me = PlayerId()
+GetPlayerServerId|Player|Convert a client player index into a server ID.|GetPlayerServerId(PlayerId())
+GetPlayerFromServerId|Player|Convert a server ID into a local player index (-1 if not in scope).|local player = GetPlayerFromServerId(id)
+GetActivePlayers|Player|Table of player indexes known to this client.|for _, player in ipairs(GetActivePlayers()) do end
+GetPlayerPed|Player|Get a player's ped. Client: player index. Server: server ID.|local ped = GetPlayerPed(src)
+GetPlayerName|Player|A player's name. Client: player index. Server: server ID.|GetPlayerName(src)
+@GetPlayers|server|Player|Table of all connected players' server IDs (as strings).|for _, id in ipairs(GetPlayers()) do end|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/GetPlayers/
+@GetPlayerIdentifiers|server|Player|Table of all identifiers (license, discord, fivem...) for a player.|local ids = GetPlayerIdentifiers(src)|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/GetPlayerIdentifiers/
+GetPlayerIdentifierByType|Player|One identifier by type, e.g. 'license'. The usual way to save player data.|GetPlayerIdentifierByType(src, 'license')
+GetPlayerPing|Player|A player's ping in ms.|GetPlayerPing(src)
+DropPlayer|Player|Kick a player with a reason.|DropPlayer(src, 'Kicked by staff')
+IsPlayerAceAllowed|Permissions|Check if a player has an ACE permission. Use for every admin event.|if IsPlayerAceAllowed(src, 'myres.admin') then end
+IsAceAllowed|Permissions|Check an ACE for the current context (the local player on the client).|IsAceAllowed('command.car')
+GetEntityCoords|Entity|Position of an entity as a vector3. Works on the server too (OneSync).|local pos = GetEntityCoords(ped)
+SetEntityCoords|Entity|Teleport an entity.|SetEntityCoords(ped, x, y, z, false, false, false, false)
+GetEntityHeading|Entity|Direction an entity faces, 0 to 360.|GetEntityHeading(ped)
+SetEntityHeading|Entity|Set the direction an entity faces.|SetEntityHeading(ped, 90.0)
+FreezeEntityPosition|Entity|Stop an entity from moving.|FreezeEntityPosition(ped, true)
+DoesEntityExist|Entity|Check an entity handle is valid.|if DoesEntityExist(veh) then end
+DeleteEntity|Entity|Delete an entity.|DeleteEntity(obj)
+GetEntityModel|Entity|The model hash of an entity.|GetEntityModel(veh) == `adder`
+GetEntityHealth|Entity|Current health (peds: 100 is dead, 200 full by default).|GetEntityHealth(ped)
+SetEntityHealth|Entity|Set an entity's health.|SetEntityHealth(ped, 200)
+SetEntityInvincible|Entity|Make an entity unable to take damage.|SetEntityInvincible(ped, true)
+SetEntityVisible|Entity|Show or hide an entity.|SetEntityVisible(ped, false, false)
+NetworkGetNetworkIdFromEntity|Networking|Entity handle to network ID (send this between machines).|local netId = NetworkGetNetworkIdFromEntity(veh)
+NetworkGetEntityFromNetworkId|Networking|Network ID back to a local entity handle.|local veh = NetworkGetEntityFromNetworkId(netId)
+NetworkDoesEntityExistWithNetworkId|Networking|Check a network ID is in scope on this client before using it.|if NetworkDoesEntityExistWithNetworkId(netId) then end
+NetworkGetEntityOwner|Networking|Which player currently owns (simulates) an entity.|NetworkGetEntityOwner(veh)
+SetPlayerRoutingBucket|Networking|Move a player into a routing bucket (separate world instance).|SetPlayerRoutingBucket(src, 5)
+GetPlayerRoutingBucket|Networking|Which routing bucket a player is in.|GetPlayerRoutingBucket(src)
+@Entity(x).state|both|State bags|An entity's state bag. Read or set values; :set(key, value, replicated).|Entity(veh).state:set('fuel', 50, true)|https://docs.fivem.net/docs/scripting-manual/networking/state-bags/
+@Player(src).state|server|State bags|A player's state bag on the server.|Player(src).state:set('job', 'police', true)|https://docs.fivem.net/docs/scripting-manual/networking/state-bags/
+@LocalPlayer.state|client|State bags|Your own player state bag on the client.|print(LocalPlayer.state.job)|https://docs.fivem.net/docs/scripting-manual/networking/state-bags/
+@GlobalState|both|State bags|Server-wide state: written by the server, read everywhere.|GlobalState.bankOpen = true|https://docs.fivem.net/docs/scripting-manual/networking/state-bags/
+AddStateBagChangeHandler|State bags|Run a function when a state bag key changes.|AddStateBagChangeHandler('job', nil, function(bag, key, value) end)
+GetPlayerFromStateBagName|State bags|Turn a 'player:ID' bag name into a player: the server ID on the server, the player handle (like PlayerId()) on the client.|GetPlayerFromStateBagName(bagName)
+GetEntityFromStateBagName|State bags|Turn an entity bag name into an entity handle.|GetEntityFromStateBagName(bagName)
+RequestModel|Models & spawning|Start loading a model. Then wait for HasModelLoaded.|RequestModel(`adder`)
+HasModelLoaded|Models & spawning|True once a requested model is loaded.|while not HasModelLoaded(model) do Wait(0) end
+SetModelAsNoLongerNeeded|Models & spawning|Release a model you finished using.|SetModelAsNoLongerNeeded(model)
+IsModelInCdimage|Models & spawning|Check a model exists in the game files.|IsModelInCdimage('adder')
+IsModelAVehicle|Models & spawning|Check a model is a vehicle.|IsModelAVehicle('adder')
+CreateVehicle|Models & spawning|Spawn a vehicle. On the server, prefer CreateVehicleServerSetter.|CreateVehicle(model, x, y, z, heading, true, false)
+CreateVehicleServerSetter|Models & spawning|Spawn a vehicle from the server with a type string ('automobile', 'bike'...).|CreateVehicleServerSetter(`adder`, 'automobile', x, y, z, h)
+CreatePed|Models & spawning|Spawn a ped.|CreatePed(4, model, x, y, z, heading, true, false)
+CreateObject|Models & spawning|Spawn a prop/object.|CreateObject(`prop_cone_float_1`, x, y, z, true, false, false)
+SetEntityAsNoLongerNeeded|Models & spawning|Hand a spawned entity back to the game to clean up.|SetEntityAsNoLongerNeeded(veh)
+GetVehiclePedIsIn|Vehicles|The vehicle a ped is in (0 if none). Second arg true = last vehicle.|local veh = GetVehiclePedIsIn(ped, false)
+IsPedInAnyVehicle|Vehicles|Is the ped in a vehicle?|IsPedInAnyVehicle(ped, false)
+GetPedInVehicleSeat|Vehicles|Who sits in a seat (-1 = driver).|GetPedInVehicleSeat(veh, -1)
+SetPedIntoVehicle|Vehicles|Instantly place a ped in a seat.|SetPedIntoVehicle(ped, veh, -1)
+TaskWarpPedIntoVehicle|Vehicles|Warp a ped into a seat (also works from the server).|TaskWarpPedIntoVehicle(ped, veh, -1)
+GetVehicleNumberPlateText|Vehicles|Read a plate.|GetVehicleNumberPlateText(veh)
+SetVehicleNumberPlateText|Vehicles|Set a plate (max 8 characters).|SetVehicleNumberPlateText(veh, 'STUDY')
+SetVehicleDoorsLocked|Vehicles|Lock state: 1 unlocked, 2 locked.|SetVehicleDoorsLocked(veh, 2)
+SetVehicleFixed|Vehicles|Repair a vehicle completely.|SetVehicleFixed(veh)
+SetVehicleEngineOn|Vehicles|Turn the engine on or off.|SetVehicleEngineOn(veh, false, true, true)
+GetVehicleFuelLevel|Vehicles|Current fuel in litres.|GetVehicleFuelLevel(veh)
+SetVehicleFuelLevel|Vehicles|Set fuel in litres.|SetVehicleFuelLevel(veh, 40.0)
+RequestAnimDict|Peds & animation|Start loading an animation dictionary.|RequestAnimDict('mp_common')
+HasAnimDictLoaded|Peds & animation|True once the dictionary is loaded.|while not HasAnimDictLoaded(dict) do Wait(0) end
+TaskPlayAnim|Peds & animation|Play an animation on a ped.|TaskPlayAnim(ped, dict, 'givetake1_a', 8.0, -8.0, 2000, 0, 0.0, false, false, false)
+ClearPedTasks|Peds & animation|Stop what a ped is doing (including animations).|ClearPedTasks(ped)
+TaskStartScenarioInPlace|Peds & animation|Play a world scenario like leaning or smoking.|TaskStartScenarioInPlace(ped, 'WORLD_HUMAN_SMOKING', 0, true)
+SetBlockingOfNonTemporaryEvents|Peds & animation|Stop an NPC from reacting/fleeing (shopkeepers).|SetBlockingOfNonTemporaryEvents(npc, true)
+GiveWeaponToPed|Peds & animation|Give a weapon with ammo.|GiveWeaponToPed(ped, `WEAPON_PISTOL`, 50, false, true)
+RemoveAllPedWeapons|Peds & animation|Take all weapons away.|RemoveAllPedWeapons(ped, true)
+SetPedArmour|Peds & animation|Set body armour 0 to 100.|SetPedArmour(ped, 100)
+SetPedComponentVariation|Peds & animation|Set a clothing component (global index). See collection natives too.|SetPedComponentVariation(ped, 11, 15, 0, 0)
+SetPedCollectionComponentVariation|Peds & animation|Set clothing by collection name + local index (survives game updates).|SetPedCollectionComponentVariation(ped, 4, 'female_heist', 9, 3, 0)
+DrawMarker|World & markers|Draw a 3D marker. Must be called every frame.|DrawMarker(1, x, y, z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.5, 245, 176, 66, 150, false, false, 2, false, nil, nil, false)
+GetStreetNameAtCoord|World & markers|Street and crossing hashes at a position (two return values in Lua).|local street, crossing = GetStreetNameAtCoord(x, y, z)
+GetStreetNameFromHashKey|World & markers|Street hash to readable name.|GetStreetNameFromHashKey(street)
+SetNewWaypoint|World & markers|Set the map waypoint.|SetNewWaypoint(x, y)
+AddBlipForCoord|Blips|Create a map blip at a position.|local blip = AddBlipForCoord(x, y, z)
+AddBlipForEntity|Blips|Create a blip that follows an entity.|AddBlipForEntity(veh)
+SetBlipSprite|Blips|Blip icon (see Game References > Blips).|SetBlipSprite(blip, 52)
+SetBlipColour|Blips|Blip colour.|SetBlipColour(blip, 2)
+SetBlipScale|Blips|Blip size.|SetBlipScale(blip, 0.8)
+SetBlipAsShortRange|Blips|Only show on the minimap when nearby.|SetBlipAsShortRange(blip, true)
+BeginTextCommandSetBlipName|Blips|Start naming a blip (with AddTextComponentSubstringPlayerName).|BeginTextCommandSetBlipName('STRING')
+EndTextCommandSetBlipName|Blips|Finish naming a blip.|EndTextCommandSetBlipName(blip)
+RemoveBlip|Blips|Delete a blip.|RemoveBlip(blip)
+AddTextEntry|Text & HUD|Register a text label you can reuse in text commands.|AddTextEntry('MY_HELP', 'Press ~INPUT_CONTEXT~ to open')
+BeginTextCommandDisplayHelp|Text & HUD|Start a help message (top left).|BeginTextCommandDisplayHelp('MY_HELP')
+EndTextCommandDisplayHelp|Text & HUD|Show the help message.|EndTextCommandDisplayHelp(0, false, true, -1)
+BeginTextCommandThefeedPost|Text & HUD|Start a notification above the minimap.|BeginTextCommandThefeedPost('STRING')
+AddTextComponentSubstringPlayerName|Text & HUD|Add a string to the current text command.|AddTextComponentSubstringPlayerName('Hello')
+EndTextCommandThefeedPostTicker|Text & HUD|Show the notification.|EndTextCommandThefeedPostTicker(false, true)
+DoScreenFadeOut|Text & HUD|Fade the screen to black over N ms.|DoScreenFadeOut(500)
+DoScreenFadeIn|Text & HUD|Fade back in.|DoScreenFadeIn(500)
+RequestScaleformMovie|Text & HUD|Load a Scaleform movie; returns a handle.|local sf = RequestScaleformMovie('mp_big_message_freemode')
+DrawScaleformMovieFullscreen|Text & HUD|Draw a Scaleform movie full screen (every frame).|DrawScaleformMovieFullscreen(sf, 255, 255, 255, 255, 0)
+SetNuiFocus|NUI|Give the NUI page keyboard and/or mouse focus. Always reset to false, false.|SetNuiFocus(true, true)
+@SendNUIMessage|client|NUI|Send a Lua table to your NUI page (JSON-encoded for you).|SendNUIMessage({ type = 'open' })|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/SendNUIMessage/
+RegisterNuiCallback|NUI|Handle a fetch() from your NUI page. Always call cb.|RegisterNuiCallback('close', function(data, cb) cb({ ok = true }) end)
+GetCurrentResourceName|Resources & data|The name of the resource this script is in.|GetCurrentResourceName()
+GetResourceState|Resources & data|'started', 'stopped', 'missing'... of any resource.|GetResourceState('qb-core') == 'started'
+GetInvokingResource|Resources & data|Which resource called your export/event (nil if your own).|local caller = GetInvokingResource()
+@exports|both|Resources & data|Define an export, or call another resource's export.|exports('Hello', fn) / exports.other:Hello()|https://docs.fivem.net/docs/scripting-manual/runtimes/lua/#using-exports
+LoadResourceFile|Resources & data|Read a file from a resource as text.|LoadResourceFile(GetCurrentResourceName(), 'data.json')
+SaveResourceFile|Resources & data|Write a file into a resource folder.|SaveResourceFile(GetCurrentResourceName(), 'data.json', text, -1)
+SetResourceKvp|Resources & data|Save a string in the resource's key-value store (client: on the player's PC).|SetResourceKvp('volume', '0.5')
+GetResourceKvpString|Resources & data|Read a saved KVP string.|GetResourceKvpString('volume')
+GetConvar|Resources & data|Read a convar (server.cfg setting) as a string.|GetConvar('sv_hostname', 'unknown')
+GetConvarInt|Resources & data|Read a convar as a number.|GetConvarInt('maxPolice', 10)
+@PerformHttpRequest|server|Resources & data|Make an HTTP request. Fine for webhooks; never load() what it returns.|PerformHttpRequest(url, function(status, body, headers) end, 'GET')|https://docs.fivem.net/docs/scripting-reference/runtimes/lua/functions/PerformHttpRequest/

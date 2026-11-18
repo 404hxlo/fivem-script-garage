@@ -1,0 +1,715 @@
+=== resources | Introduction | Resources and the manifest | 10
+docs: Introduction to Resources | https://docs.fivem.net/docs/scripting-manual/introduction/introduction-to-resources/
+docs: Resource manifest reference | https://docs.fivem.net/docs/scripting-reference/resource-manifest/
+--- summary
+Everything on your server is a resource: a folder of scripts and files with an `fxmanifest.lua` that tells FXServer what to load.
+
+--- section What a resource is
+A **resource** is a folder of files (client scripts, server scripts, UI pages, streamed models) that the server can start, stop and restart on its own, without rebooting anything else. Your RP framework, your inventory, your chat and your car dealer are all separate resources.
+
+The server loads resources from the `resources/` folder inside your server-data folder. Every folder in there is treated as a resource, **except** folders whose names are in `[square brackets]`. Bracket folders are *categories*: they only group resources together, and they can contain other categories.
+
+```text file=folder layout
+server-data
+└── resources
+    ├── [local]              <- a category (not a resource)
+    │   ├── hello            <- resource "hello"
+    │   │   ├── fxmanifest.lua
+    │   │   ├── client.lua
+    │   │   └── server.lua
+    │   └── [jobs]           <- a category inside a category
+    │       └── garbage      <- resource "garbage"
+    │           └── fxmanifest.lua
+    └── chat                 <- resource "chat"
+        └── fxmanifest.lua
+```
+
+In that tree the resources are `hello`, `garbage` and `chat`. The resource name is always the folder name, never the category. The docs suggest keeping your own work in `resources/[local]`.
+
+--- section The manifest: fxmanifest.lua
+Every resource **must** have a file called `fxmanifest.lua` in its folder. It is always written in Lua, even if your scripts are JavaScript or C#. Without it, the server prints a warning that the resource has no manifest and skips it. Very old resources use `__resource.lua` instead; that name is deprecated and you should rename it to `fxmanifest.lua` and update the contents.
+
+```lua file=fxmanifest.lua
+fx_version 'cerulean'   -- the current manifest version
+game 'gta5'             -- 'gta5', 'rdr3' or 'common'
+
+author 'Your Name'
+description 'My first resource'
+version '1.0.0'
+
+shared_script 'config.lua'   -- loaded on BOTH client and server
+client_script 'client.lua'   -- runs on every player's PC
+server_script 'server.lua'   -- runs only on the server
+
+-- Several files at once: use a table (note the s in client_scripts)
+-- client_scripts { 'client/main.lua', 'client/menu.lua' }
+
+-- Files the client needs to download (UI pages, images, data)
+-- files { 'html/index.html', 'html/app.js' }
+
+-- Start these resources first
+-- dependency 'chat'
+```
+
+Each line adds a piece of metadata. `fx_version` picks which feature set your resource gets; `cerulean` is the current one. `game` says which game the resource is for. `client_script`, `server_script` and `shared_script` say which files run where.
+
+! Many script entries accept **globbing** patterns: `'client/*.lua'` loads every Lua file in `client/`, and `'**/*.lua'` loads them in every subfolder too. Convenient, but it also loads files you did not expect, so keep an eye on what is inside your folders.
+
+--- section Starting resources
+You start resources from `server.cfg` (when the server boots) or from the server console (while it runs).
+
+```cfg file=server.cfg
+# start one resource (starts it, or restarts it if it is already running)
+ensure hello
+
+# start every resource inside a category folder
+start [local]
+```
+
+Console commands you will use constantly:
+
+- `refresh` re-reads every `fxmanifest.lua`. Run it after adding a new resource folder or editing a manifest.
+- `ensure name` starts the resource, or restarts it if it is already running.
+- `restart name` restarts a running resource so it picks up your edited scripts.
+- `stop name` stops it.
+
+You can chain commands with semicolons: `refresh; ensure hello`.
+
+--- section The standard resources
+A fresh server already comes with resources from Cfx.re, such as `chat`, `spawnmanager`, `mapmanager`, `sessionmanager` and `hardcap`. The docs advise you not to edit them unless you know what you are doing, because a lot of other scripts depend on them. In this course we use `chat` a lot: its `chat:addMessage` event is how we print messages to the chat box.
+
+--- deeper Manifest entries you will meet in RP scripts
+- `dependency 'oxmysql'` (or `dependencies { ... }`) makes sure another resource is started first. If it is missing, your resource will not start.
+- `ui_page 'html/index.html'` gives your resource a full-screen web UI (covered in the NUI lesson).
+- `loadscreen 'index.html'` turns the resource into a loading screen.
+- `export 'Name'` and `server_export 'Name'` declare functions other resources can call.
+- `provide 'mysql-async'` makes your resource act as a stand-in for another resource name.
+- `lua54 'yes'` is **deprecated and no longer needed**: since June 2025 every Lua script runs on Lua 5.4. You will still see it in older scripts; it is harmless to delete.
+- You can add your own custom keys too, and read them from scripts with `GetResourceMetadata(resourceName, key, index)`.
+
+--- framework
+QBCore and ESX resources use the exact same manifest format. The difference is usually an extra `dependency 'qb-core'` or `shared_script '@es_extended/imports.lua'` line. The `@resource/file` syntax loads a file *from another resource*, which is how frameworks share their helper code.
+
+--- task Make your first resource
+1. On your server PC, create the folder `resources/[local]/hello`.
+2. Inside it, create `fxmanifest.lua` with `fx_version 'cerulean'`, `game 'gta5'` and `client_script 'client.lua'`.
+3. Create `client.lua` containing one line: `print('hello from my first resource!')`
+4. In the server console, run `refresh` and then `ensure hello`.
+5. In game, press <kbd>F8</kbd> to open the client console. You should see your message.
+6. Add `ensure hello` to `server.cfg` so it starts on every boot.
+
+--- quiz
+? Which file must every resource folder contain?
++ fxmanifest.lua
+- server.cfg
+- resource.json
+- init.lua
+> The manifest `fxmanifest.lua` tells FXServer what the resource is and which files it loads. `server.cfg` belongs to the server, not to a resource.
+
+? Your resources folder contains `[jobs]/garbage/fxmanifest.lua`. What is the resource called?
+- [jobs]
++ garbage
+- jobs/garbage
+- [jobs]garbage
+> Bracket folders are categories, not resources. The resource name is the folder that holds the manifest: `garbage`.
+
+? You just created a brand-new resource folder while the server is running. What do you run in the console?
+- restart server
+- start resources
++ refresh, then ensure yourresource
+- reload yourresource
+> The server only knows about new folders after `refresh` re-reads the manifests. Then `ensure` starts it.
+
+=== first-script | Introduction | Your first script | 15
+docs: Creating your first script in Lua | https://docs.fivem.net/docs/scripting-manual/introduction/creating-your-first-script/
+docs: First script in JavaScript | https://docs.fivem.net/docs/scripting-manual/introduction/creating-your-first-script-javascript/
+docs: First script in C# | https://docs.fivem.net/docs/scripting-manual/introduction/creating-your-first-script-csharp/
+--- summary
+Write a `/car` command that spawns a vehicle, and learn the difference between client scripts and server scripts.
+
+--- section Client scripts vs server scripts
+This is the single most important idea in FiveM scripting.
+
+- A **client script** runs on *every player's own PC*. Each player has their own copy, with its own variables. Client scripts can touch the game world: spawn cars, draw markers, play animations, read key presses.
+- A **server script** runs *once*, on the server. It is the **source of trust**: it decides things for everyone, talks to the database, and checks that players are not cheating.
+
+Two players never share client variables. If player A sets `local money = 500` in a client script, player B's copy knows nothing about it. Anything that must be shared or trusted (money, items, jobs) belongs on the server.
+
+! Cheaters control their own PC, so they can change anything a client script does. That is why the server must double-check every request. You will learn exactly how in the security lesson.
+
+--- section A command that talks
+`RegisterCommand` creates a chat/console command. The handler function receives `source` (who ran it), `args` (the words after the command) and `rawCommand` (the full text typed).
+
+```lua file=client.lua
+RegisterCommand('car', function(source, args)
+    -- args[1] is the first word after /car, or nil if none was typed
+    local vehicleName = args[1] or 'adder'
+
+    TriggerEvent('chat:addMessage', {
+        args = { 'I would spawn a ' .. vehicleName .. ' but I am not written yet.' }
+    })
+end, false) -- false = anyone can use it
+```
+
+Typing `/car zentorno` makes `args` equal to `{ 'zentorno' }`. Typing `/car zentorno fast` gives `{ 'zentorno', 'fast' }`. `TriggerEvent('chat:addMessage', ...)` asks the `chat` resource to print a line in the local chat box.
+
+--- section Spawning the car properly
+Spawning a vehicle takes seven steps, and the docs walk through each one: check the model exists, load it, wait for it to load, find the player, create the vehicle, put the player in it, and clean up.
+
+```lua file=client.lua
+RegisterCommand('car', function(source, args)
+    local vehicleName = args[1] or 'adder'
+
+    -- 1. check the model exists and really is a vehicle
+    if not IsModelInCdimage(vehicleName) or not IsModelAVehicle(vehicleName) then
+        TriggerEvent('chat:addMessage', {
+            args = { 'There is no vehicle called ' .. vehicleName .. '.' }
+        })
+        return
+    end
+
+    -- 2. ask the game to load the model
+    RequestModel(vehicleName)
+
+    -- 3. wait until it is loaded (Wait gives the game time to run)
+    while not HasModelLoaded(vehicleName) do
+        Wait(500)
+    end
+
+    -- 4. find the local player's ped (their character) and position
+    local playerPed = PlayerPedId()
+    local pos = GetEntityCoords(playerPed)
+
+    -- 5. create the vehicle: true = networked (others can see it), false = not a mission entity
+    local vehicle = CreateVehicle(vehicleName, pos.x, pos.y, pos.z, GetEntityHeading(playerPed), true, false)
+
+    -- 6. put the player in the driver seat (-1 is the driver)
+    SetPedIntoVehicle(playerPed, vehicle, -1)
+
+    -- 7. let the game manage the car and release the model from memory
+    SetEntityAsNoLongerNeeded(vehicle)
+    SetModelAsNoLongerNeeded(vehicleName)
+
+    TriggerEvent('chat:addMessage', {
+        args = { 'Enjoy your new ^*' .. vehicleName .. '!' }
+    })
+end, false)
+```
+
+Why the `Wait(500)` inside the loop? FiveM scripts are **cooperative**: your code and the game take turns. A loop without a `Wait` never gives the game a turn, so the model never finishes loading and the game freezes.
+
+A **ped** ("pedestrian") is any living character with legs, including the player's own body. `PlayerPedId()` returns the local player's ped. Peds and vehicles are both **entities**, so the same `GetEntityCoords` works for both.
+
+--- section Your first server script
+Server scripts can register commands too. On the server, `source` is the **server ID** of the player who typed it (or `0` if it came from the server console). To send something back to that one player, the server triggers a client event on them.
+
+```lua file=server.lua
+RegisterCommand('hello', function(source, args, rawCommand)
+    if source == 0 then
+        print('Hello, console!')
+        return
+    end
+
+    local name = GetPlayerName(source)
+
+    -- send a chat message to just this player
+    TriggerClientEvent('chat:addMessage', source, {
+        color = { 245, 176, 66 },
+        args = { 'Server', 'Hello ' .. name .. ', your server ID is ' .. source }
+    })
+end, false)
+```
+
+```lua file=fxmanifest.lua
+fx_version 'cerulean'
+game 'gta5'
+
+client_script 'client.lua'
+server_script 'server.lua'
+```
+
+--- deeper The game type example from the docs
+The docs' first script is a tiny game type that uses the `spawnmanager` resource's exports to spawn the player at a chosen spot. RP servers already have a spawn system from their framework, so you will rarely write this yourself, but it shows two useful ideas: `vector3` positions, and calling another resource's functions with `exports.resourceName:functionName(...)`.
+
+```lua file=client.lua
+local spawnPos = vector3(686.245, 577.950, 130.461)
+
+AddEventHandler('onClientGameTypeStart', function()
+    exports.spawnmanager:setAutoSpawnCallback(function()
+        exports.spawnmanager:spawnPlayer({
+            x = spawnPos.x,
+            y = spawnPos.y,
+            z = spawnPos.z,
+            model = 'a_m_m_skater_01'
+        }, function()
+            TriggerEvent('chat:addMessage', { args = { 'Welcome to the party!~' } })
+        end)
+    end)
+
+    exports.spawnmanager:setAutoSpawn(true)
+    exports.spawnmanager:forceRespawn()
+end)
+```
+
+That resource's manifest also has `resource_type 'gametype' { name = 'My awesome game type!' }`. Only add `resource_type` if you are really making a game type for `mapmanager`; normal add-on scripts leave it out.
+
+--- deeper JavaScript and C# versions
+The docs have the same tutorial in JavaScript and C#. In JS, `RegisterCommand` works the same way and `emit('chat:addMessage', {...})` replaces `TriggerEvent`. In C#, you build a DLL with the CitizenFX templates and register commands from a class that inherits `BaseScript`. The logic is identical; only the syntax changes.
+
+--- framework
+On QBCore and ESX servers you still write commands like this. Frameworks add their own notification functions (for example a `QBCore:Notify` client event or `ESX.ShowNotification`), but `chat:addMessage` always works because it comes from the standard `chat` resource. For real gameplay, vehicle spawning usually goes through the framework's garage or the server so it can be checked and saved.
+
+--- task Spawn a car with your plate
+1. Create a resource `mycar` with a manifest and the full `/car` client script above.
+2. `refresh; ensure mycar` in the server console, then type `/car voltic2` in game.
+3. Now make it yours: after `SetPedIntoVehicle`, add `SetVehicleNumberPlateText(vehicle, 'STUDY')`.
+4. Run `restart mycar` and spawn again. Walk around the car to check the plate.
+5. Try `/car potato` to see your error message.
+
+--- quiz
+? Why is there a `Wait(500)` inside `while not HasModelLoaded(...)`?
+- To make the car spawn slower on purpose
++ So the game gets a turn to actually load the model; without it the game freezes
+- Because RequestModel only works every half second
+- It is only needed on the server
+> FiveM scripts share time with the game. A loop that never waits never lets the game finish loading, so the client hangs.
+
+? A player types `/car zentorno fast`. What is `args`?
+- 'zentorno fast'
++ { 'zentorno', 'fast' }
+- { '/car', 'zentorno', 'fast' }
+- { zentorno = 'fast' }
+> `args` is a table of the words after the command name. `rawCommand` holds the full original text.
+
+? Where should a player's money be changed?
+- In a client script, because it is faster
+- In config.lua
++ In a server script, because the server is the source of trust
+- In the NUI page
+> Clients can be modified by cheaters. Anything that must be trusted or saved happens on the server.
+
+=== natives | Introduction | Native functions | 12
+docs: About native functions | https://docs.fivem.net/docs/scripting-manual/introduction/about-native-functions/
+docs: Native Reference | https://docs.fivem.net/natives/
+docs: Fact sheet | https://docs.fivem.net/docs/scripting-manual/introduction/fact-sheet/
+--- summary
+Natives are the built-in functions the game and FiveM give you. Learn to read the Native Reference and tell client natives from server natives.
+
+--- section What is a native?
+A **native** is a function exposed by the game (or added by Cfx.re) that your scripts can call: spawning things, moving entities, reading keys, kicking players. Every function you called in the last lesson (`RequestModel`, `CreateVehicle`, `GetEntityCoords`) is a native. You never define them; they are always there.
+
+All of them are listed in the **Native Reference** at docs.fivem.net/natives. Each entry looks like this:
+
+```text file=native reference entry
+// 0x5fa79b0f
+// RegisterCommand
+void REGISTER_COMMAND(char* commandName, func handler, BOOL restricted);
+```
+
+- The first line is the native's **hash** (its internal ID).
+- The second line is the name you type in Lua.
+- The third line shows the official UPPER_SNAKE_CASE name, the return type and the arguments in order.
+
+In Lua the name becomes PascalCase: `REGISTER_COMMAND` is `RegisterCommand`, `GET_ENTITY_COORDS` is `GetEntityCoords`.
+
+--- section Client, server, or shared
+Every native has an **API set** that says where it can run:
+
+- **client** natives only work in client scripts (most game natives: drawing, input, peds, the camera).
+- **server** natives only work in server scripts (players, permissions, `DropPlayer`, routing buckets).
+- **shared** natives work in both (`RegisterCommand`, `GetCurrentResourceName`, `GetConvar`).
+
+Some natives exist on both sides with **different arguments**. `GetPlayerName` on the client takes a *player index*, but on the server it takes the player's *server ID* (`source`). The cheat sheet in this site shows both signatures when they differ.
+
+!! Calling a client native in a server script (or the other way round) gives an error like `attempt to call a nil value (global 'PlayerPedId')`, because that function simply does not exist on that side.
+
+--- section Using natives on the client
+This example from the docs registers a text label once, then shows it as a help message whenever the player releases <kbd>E</kbd>.
+
+```lua file=client.lua
+-- create a text label we can show later
+AddTextEntry('CUSTOM_ENTRY', 'Hello, FiveM!')
+
+CreateThread(function()
+    while true do
+        Wait(0) -- check every frame, because we are reading key presses
+
+        if IsControlJustReleased(0, 38) then -- control 38 = E
+            BeginTextCommandDisplayHelp('CUSTOM_ENTRY')
+            EndTextCommandDisplayHelp(0, false, true, -1)
+        end
+    end
+end)
+```
+
+`CreateThread` starts a piece of code that runs alongside everything else, and `Wait(0)` pauses it until the next frame. Many text natives come in **Begin / add / End** groups like this: you start a text command, add parts, then finish it to display.
+
+A notification above the minimap uses the same pattern:
+
+```lua file=client.lua
+local function notify(message)
+    BeginTextCommandThefeedPost('STRING')
+    AddTextComponentSubstringPlayerName(message)
+    EndTextCommandThefeedPostTicker(false, true)
+end
+
+RegisterCommand('ping', function()
+    notify('Pong!')
+end, false)
+```
+
+--- section Using natives on the server
+```lua file=server.lua
+RegisterCommand('getplayername', function(source, args, rawCommand)
+    if source == 0 then
+        print('This command was run from the server console.')
+        return
+    end
+
+    local playerName = GetPlayerName(source) -- server version: takes the server ID
+    print('Player Name: ' .. playerName)
+end, false)
+```
+
+--- section Argument tips
+- **Hashes:** natives that take a `Hash` (models, weapons) accept a plain string in Lua: `RequestModel('adder')` works. `GetHashKey('adder')` gives the number if you need it, and the Lua runtime also supports compile-time hashes with backticks (covered in the Runtimes lesson).
+- **Vectors:** natives that return a `Vector3`, like `GetEntityCoords`, give you a vector with `.x`, `.y` and `.z`.
+- **Pointer arguments:** when the docs show an argument like `Hash* streetName`, Lua returns it as an extra result instead of you passing it in.
+
+```lua file=client.lua
+RegisterCommand('where', function()
+    local coords = GetEntityCoords(PlayerPedId())
+    -- GetStreetNameAtCoord has two pointer outputs, so it returns two values
+    local streetHash, crossingHash = GetStreetNameAtCoord(coords.x, coords.y, coords.z)
+    local street = GetStreetNameFromHashKey(streetHash)
+
+    TriggerEvent('chat:addMessage', {
+        args = { 'Location', ('You are on %s (%.1f, %.1f, %.1f)'):format(street, coords.x, coords.y, coords.z) }
+    })
+end, false)
+```
+
+--- deeper Where else to find help
+- The **Native Reference** lets you filter by namespace (PLAYER, VEHICLE, CFX...) and by API set. Many entries have examples in Lua, JS and C#.
+- The **Cfx.re forums** have years of examples and discussions.
+- The natives repository on GitHub accepts community corrections, which is why some natives still have names like `_0x...` or parameters called `p1`: nobody has documented them yet. Avoid undocumented natives when a documented one does the job.
+- Control IDs (like 38 for E) and other lists such as blips and ped models are in the **Game References** section of the docs.
+
+--- framework
+Frameworks wrap natives in helper functions (for example `QBCore.Functions.GetClosestVehicle()` or `ESX.Game.SpawnVehicle()`), but underneath they call the same natives you are learning. Knowing the natives lets you read and fix framework code instead of guessing.
+
+--- task Build a /where command
+1. Add the `/where` command above to your `hello` resource's `client.lua`.
+2. `restart hello` and type `/where` in a few places around the map.
+3. Open the Native Reference, search for `GetStreetNameAtCoord`, and compare its parameters to the code.
+4. Bonus: add the area name using the native `GetNameOfZone` and show it in the same message.
+
+--- quiz
+? The Native Reference lists a native's API set as "client". What does that mean?
+- It only works for the player who owns the server
++ It only exists in client scripts; calling it from server.lua fails
+- It must be triggered with TriggerClientEvent
+- It is deprecated
+> API sets tell you where a native exists: client, server, or shared (both).
+
+? `REQUEST_MODEL` takes a `Hash`. What can you pass in Lua?
+- Only a number from GetHashKey
++ A model name string like 'adder' works directly
+- A vector3
+- Only backtick hashes
+> When a native is specified as taking a Hash, Lua converts a string for you. GetHashKey and backticks also work.
+
+? On the server, what does `GetPlayerName` expect as its argument?
+- The player index (0 to 128)
+- The player's ped
++ The player's server ID, such as `source`
+- The player's license identifier
+> Server natives identify players by server ID. The client version takes a local player index instead.
+
+=== runtimes | Runtimes | Lua, JavaScript and C# | 14
+docs: Scripting runtimes | https://docs.fivem.net/docs/scripting-manual/runtimes/
+docs: Scripting in Lua | https://docs.fivem.net/docs/scripting-manual/runtimes/lua/
+docs: Scripting in JavaScript | https://docs.fivem.net/docs/scripting-manual/runtimes/javascript/
+docs: Scripting in C# | https://docs.fivem.net/docs/scripting-manual/runtimes/csharp/
+--- summary
+FiveM runs Lua, JavaScript and C#. Learn what makes FiveM's Lua special: vectors, compile-time hashes, exports and built-in libraries.
+
+--- section Pick a language
+FiveM has three scripting runtimes ("ScRTs"): **Lua**, **JavaScript** and **C#**. The docs say there is no best choice and that Lua is a safe pick if you are unsure. Most RP servers and frameworks (QBCore, ESX, ox) are written in Lua, which is why this course uses it. Resources in different languages can still talk to each other through events and exports.
+
+--- section CfxLua: Lua 5.4 with extras
+FiveM uses a modified Lua 5.4 called **CfxLua**. You use it by naming your files `.lua`; nothing else is needed.
+
+! Since June 2025 every Lua script runs on 5.4, and as of October 2026 the old 5.3 compatibility mode is gone too. The only change most scripts notice: if a metatable defines `__lt`, comparing with `<=` or `>=` now also needs an `__le` metamethod.
+
+--- section Vectors
+Vectors are a real data type in CfxLua, just like numbers and strings. Natives return them and accept them, so use them for positions, rotations and even colors.
+
+```lua file=client.lua
+local shop = vector3(25.7, -1347.3, 29.5)
+local here = GetEntityCoords(PlayerPedId())
+
+-- subtracting two vector3 gives the difference; # gives its length = distance
+local distance = #(here - shop)
+
+if distance < 3.0 then
+    print('You are at the shop')
+end
+
+-- vector4 is handy for a position plus heading
+local spawn = vector4(-275.5, 6635.8, 7.4, 45.0)
+print(spawn.x, spawn.y, spawn.z, spawn.w)
+```
+
+`#(a - b)` is the modern way to measure distance. It is faster than the old `GetDistanceBetweenCoords` native and easier to read.
+
+--- section Compile-time hashes
+GTA identifies models, weapons and many other things by "Jenkins one-at-a-time" hashes. Wrapping a name in **backticks** turns it into its hash when the script loads, with zero runtime cost.
+
+```lua file=client.lua
+RequestModel(`adder`)
+
+local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
+if GetEntityModel(vehicle) == `buzzard` then
+    print("Indeed, it's a Buzzard.")
+end
+
+print(`a_m_y_skater_01`) -- prints the number
+```
+
+--- section Exports: sharing functions between resources
+An **export** lets one resource call a function in another. Define it with `exports('Name', function ... end)`, then call it with `exports.resourceName:Name(...)`.
+
+```lua file=server.lua
+-- in resource "greeter"
+exports('GetGreeting', function(name)
+    return 'Welcome to the city, ' .. tostring(name) .. '!'
+end)
+```
+
+```lua file=server.lua
+-- in any other resource (server side, because the export above is server side)
+RegisterCommand('greet', function(source, args)
+    local text = exports.greeter:GetGreeting(args[1] or 'stranger')
+    print(text)
+end, false)
+```
+
+Exports stay on the side they were defined on: a client export can only be called from client scripts, and a server export from server scripts. You can also declare exports in the manifest with `export 'Name'` (client) or `server_export 'Name'` (server); those functions must be global, and they become available after the first scheduler tick.
+
+--- section Built-in libraries
+The Lua runtime gives you three libraries on the global scope:
+
+- `json` (dkjson): `json.encode(table)` and `json.decode(text)`, great for saving and for debugging.
+- `promise`: promises for waiting on asynchronous results with `Citizen.Await`.
+- `msgpack`: compact binary encoding.
+
+```lua file=server.lua
+local data = { name = 'Mia', job = 'mechanic', cash = 250 }
+local text = json.encode(data)
+print(text)                       -- {"cash":250,"job":"mechanic","name":"Mia"}
+print(json.decode(text).job)      -- mechanic
+```
+
+--- section JavaScript
+JS files use the `.js` extension. You get the ES2017 standard library and a `console` API. Client JS has **no** browser or Node.js APIs (no DOM, no localStorage). Server JS includes a customized **Node.js 16** by default, and Node 22 if you add `node_version '22'` to the manifest, so `require` works there.
+
+```js file=client.js
+// the same /hello idea, in JavaScript
+RegisterCommand('hellojs', (source, args) => {
+    emit('chat:addMessage', {
+        args: ['JS', `Hello! You typed: ${args.join(' ')}`]
+    });
+}, false);
+```
+
+In JS, `on` / `onNet` listen for events and `emit` / `emitNet` trigger them. Typings for editors come from the `@citizenfx/client` and `@citizenfx/server` npm packages.
+
+--- section C#
+C# resources are compiled into DLLs. The docs' workflow uses Visual Studio 2022 and the official templates (`dotnet new -i CitizenFX.Templates`, then `dotnet new cfx-resource`), and `build.cmd` produces the client and server DLLs. On **FiveM for GTAV Enhanced**, Mono is replaced by .NET and you only need the .NET 10 SDK.
+
+--- deeper The __le change in practice
+If you have an older script that compares custom objects, this is the fix the docs show:
+
+```lua file=shared.lua
+local Version = {}
+Version.__index = Version
+
+Version.__lt = function(a, b) return a.number < b.number end
+-- required for <= and >= since October 2026
+Version.__le = function(a, b) return a.number <= b.number end
+
+local old = setmetatable({ number = 1 }, Version)
+local new = setmetatable({ number = 2 }, Version)
+print(old <= new) -- true
+```
+
+--- deeper JS gotcha: thread affinity
+Node.js callbacks (like `fs.readFile`) run on a separate thread, and FiveM server natives can only be called on the main thread. Calling one from inside such a callback gives "No current resource manager". The fix is to wrap the native call in `setImmediate(() => { ... })`, which runs it on the next game tick.
+
+--- framework
+QBCore's core object is fetched with an export: `local QBCore = exports['qb-core']:GetCoreObject()`. ESX does the same with `ESX = exports['es_extended']:getSharedObject()`. Now you know what those lines actually do: they call an export in the framework resource.
+
+--- task Make two resources talk
+1. Create a resource `greeter` with a `server.lua` containing the `GetGreeting` export.
+2. Create a second resource `welcome` whose `server.lua` registers `/greet` and calls the export.
+3. In `welcome`'s manifest add `dependency 'greeter'` so the export always exists first.
+4. `refresh; ensure greeter; ensure welcome`, then type `/greet Mia` in game and look at the server console.
+5. Bonus: change the message to use `json.encode` to print a table of the args.
+
+--- quiz
+? Which Lua version does FiveM's CfxLua use?
+- Lua 5.1 (like LuaJIT)
+- Lua 5.3, unless you add lua54 'yes'
++ Lua 5.4, with FiveM extras like vectors
+- Luau
+> All Lua scripts now run on 5.4. `lua54 'yes'` is deprecated and no longer needed.
+
+? How do you get the distance between two `vector3` values `a` and `b`?
+- a:distance(b)
++ #(a - b)
+- math.dist(a, b)
+- a - b
+> Subtracting gives a vector between the points; the `#` length operator turns it into a distance.
+
+? Where can JavaScript use Node.js APIs like `require('fs')`?
+- In client scripts
++ In server scripts only
+- In both client and server scripts
+- Only inside NUI pages
+> The customized Node.js runtime exists only on the server. Client JS has no Node or browser APIs.
+
+=== debugging | Debugging | Finding and fixing errors | 12
+docs: Debugging | https://docs.fivem.net/docs/scripting-manual/debugging/
+docs: Using the profiler | https://docs.fivem.net/docs/scripting-manual/debugging/using-profiler/
+docs: Fact sheet (performance) | https://docs.fivem.net/docs/scripting-manual/introduction/fact-sheet/
+--- summary
+Read SCRIPT ERROR messages, use the F8 and server consoles, and find laggy resources with resmon and the profiler.
+
+--- section Where errors show up
+There are two consoles, and you need both:
+
+- The **server console** (your FXServer window or txAdmin's Live Console) shows output and errors from **server scripts**, plus resource start/stop messages.
+- The **client console** (press <kbd>F8</kbd> in game) shows output and errors from **client scripts** on *your* PC.
+
+`print(...)` writes to the console of whichever side the script runs on. A `print` in `client.lua` will never appear in the server console.
+
+--- section Reading a SCRIPT ERROR
+When Lua code crashes, FiveM prints a `SCRIPT ERROR` with the resource, file and line number. Learn to read it left to right.
+
+```text file=example error
+SCRIPT ERROR: @mycar/server.lua:3: attempt to call a nil value (global 'PlayerPedId')
+```
+
+- `@mycar/server.lua:3` is the resource, file and line.
+- `attempt to call a nil value (global 'PlayerPedId')` means you called a function that does not exist **here**. Usually it is a typo, or a client native used on the server (or the reverse).
+
+Other messages you will see a lot:
+
+- `attempt to index a nil value (local 'data')`: you used `data.something` but `data` is nil. Check where it should have been set.
+- `attempt to concatenate a nil value`: you joined text with `..` and one side was nil. Wrap it in `tostring(...)` while debugging.
+- `bad argument #1 to ...`: a function got the wrong type of value.
+- `Couldn't start resource`: often a manifest problem, a missing file, or a missing dependency.
+
+--- section Debug prints that help
+Printing a whole table with `print(tbl)` just shows `table: 0x...`. Encode it to JSON instead. A small debug switch lets you turn noisy prints off later.
+
+```lua file=config.lua
+Config = {}
+Config.Debug = true
+```
+
+```lua file=client.lua
+-- named debugPrint so it does not hide Lua's built-in debug library
+local function debugPrint(...)
+    if Config.Debug then
+        print('[mycar]', ...)
+    end
+end
+
+RegisterCommand('vehinfo', function()
+    local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
+    debugPrint('vehicle handle:', vehicle)
+
+    if vehicle == 0 then
+        debugPrint('not in a vehicle')
+        return
+    end
+
+    debugPrint(json.encode({
+        model = GetEntityModel(vehicle),
+        plate = GetVehicleNumberPlateText(vehicle),
+        coords = GetEntityCoords(vehicle)
+    }))
+end, false)
+```
+
+--- section Performance: resmon and the profiler
+**Hitch warnings** in the server console mean a resource took too long to run, which makes the whole server stutter. The usual causes are slow database queries and loops that do too much work.
+
+- **resmon** (resource monitor) runs on the client. Type `resmon true` in <kbd>F8</kbd> to see how much CPU time (ms) and memory each resource uses. If you get "Access denied for command resmon", launch FiveM with the `+set moo 31337` argument to enable developer mode.
+- **The profiler** records exactly where the time goes. It works on the server and the client: run `profiler record 500` to record 500 frames, then `profiler view` to open the results.
+
+A common fix: a thread that runs `Wait(0)` forever even when the player is nowhere near anything. Sleep longer when there is nothing to do:
+
+```lua file=client.lua
+local shop = vector3(25.7, -1347.3, 29.5)
+
+CreateThread(function()
+    while true do
+        local sleep = 1000 -- far away: check once per second
+        local distance = #(GetEntityCoords(PlayerPedId()) - shop)
+
+        if distance < 20.0 then
+            sleep = 0 -- close: run every frame so the marker is smooth
+            DrawMarker(1, shop.x, shop.y, shop.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                1.5, 1.5, 0.6, 245, 176, 66, 150, false, false, 2, false, nil, nil, false)
+        end
+
+        Wait(sleep)
+    end
+end)
+```
+
+--- section Debugging NUI pages
+Web UIs (NUI, a later lesson) have their own Chromium developer tools. While the game is running, open `http://localhost:13172/` in Chrome or Edge on the same PC, or type `nui_devTools` in <kbd>F8</kbd> (developer mode needed). Errors from your HTML and JavaScript show there, not in F8.
+
+--- deeper A debugging routine that works
+1. Reproduce the problem and note exactly what you did.
+2. Check **both** consoles for the first error (later errors are often caused by the first one).
+3. Go to the file and line in the error.
+4. Add `print` lines before the failing line to see what each value really is.
+5. Change one thing, `restart` the resource, test again.
+6. Remove or switch off your debug prints when done.
+
+--- framework
+Framework errors often look like `attempt to index a nil value (global 'QBCore')`. That means the script tried to use the framework before getting it. Check that the manifest lists the framework as a `dependency`, that `server.cfg` starts the framework *before* the script, and that the script fetched the core object correctly.
+
+--- task Break it on purpose
+1. In your `mycar` resource, add `print(PlayerPedId())` to a **server** script and `restart mycar`.
+2. Find the SCRIPT ERROR in the server console. Note the file, line and message.
+3. Move the line to `client.lua`, restart, and confirm it prints a number in <kbd>F8</kbd>.
+4. Type `resmon true` in F8 and find your resource in the list.
+5. Run `profiler record 300` then `profiler view` in F8 and look at the result for a minute.
+
+--- quiz
+? The server console shows `attempt to call a nil value (global 'PlayerPedId')`. What is the most likely cause?
+- PlayerPedId needs a player ID argument
++ A client-only native was called in a server script
+- The player was not spawned yet
+- The resource needs lua54 'yes'
+> PlayerPedId only exists on the client. On the server it is nil, and calling nil gives this error.
+
+? How do you open developer tools for a NUI page?
+- Press F12 in game
++ Visit http://localhost:13172/ while the game runs, or use nui_devTools in F8
+- Run profiler view
+- Open the server console
+> CEF remote debugging is exposed on port 13172 while the game is running.
+
+? Players report frame drops near your shop script. What do you check first?
+- server.cfg
+- The NUI dev tools
++ resmon in F8, then the profiler, to see which resource uses the most time
+- The Native Reference
+> resmon shows per-resource CPU time; the profiler tells you which code inside it is slow.

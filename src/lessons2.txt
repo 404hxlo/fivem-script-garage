@@ -1,0 +1,768 @@
+=== network-ids | Networking | Network and local IDs | 12
+docs: Networking | https://docs.fivem.net/docs/scripting-manual/networking/
+docs: Network and Local IDs | https://docs.fivem.net/docs/scripting-manual/networking/ids/
+--- summary
+Players and entities have several kinds of IDs. Learn which one to use where, and which one to send between client and server.
+
+--- section Why IDs are confusing
+The same player or car has **different numbers** depending on who is looking. Your client's handle for a car is not the same as another player's handle for that car. Use the wrong kind of ID and your script silently does nothing, or acts on the wrong thing.
+
+This lesson assumes **OneSync** (the docs call it "state awareness"), which every modern RP server uses.
+
+--- section Player IDs
+| ID | Where it exists | What it is |
+| --- | --- | --- |
+| **Server ID** | Server (as `source`) and client | A temporary number for a connected player. Same for everyone. |
+| **Player index** | Client only | A local number from 0 to 128 used by game natives. Different on every client. |
+| **Ped** | Both | The player's character entity. Get it with `GetPlayerPed`. |
+
+On the client you convert between the two player IDs:
+
+```lua file=client.lua
+local myIndex = PlayerId()                 -- my local player index
+local myServerId = GetPlayerServerId(myIndex)
+
+-- turn a server ID (from an event) into a local player index
+local function pedFromServerId(serverId)
+    local player = GetPlayerFromServerId(serverId)
+    if player == -1 then
+        return nil -- that player is not in scope (too far away) on this client
+    end
+    return GetPlayerPed(player)
+end
+
+print(('My index %d, my server ID %d'):format(myIndex, myServerId))
+```
+
+`GetPlayerFromServerId` returns `-1` when the player exists on the server but not on your client yet, for example because they are on the other side of the map.
+
+--- section Entity handles vs network IDs
+- An **entity handle** is local. The same car can have a different handle on your PC, on someone else's PC, and on the server. Handles are fine *inside one script on one machine*.
+- A **network ID** is shared. It is a 16-bit number that stays the same for the entity's whole life and means the same thing on every client and the server.
+
+**Rule:** whenever you send an entity to another machine (client to server, or server to client), send its **network ID**, and convert back on the other side.
+
+```lua file=client.lua
+RegisterCommand('lock', function()
+    local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
+    if vehicle == 0 then return end
+
+    -- convert the local handle to a network ID before sending it
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+    TriggerServerEvent('garage:lockVehicle', netId)
+end, false)
+```
+
+```lua file=server.lua
+RegisterNetEvent('garage:lockVehicle', function(netId)
+    local src = source
+    if type(netId) ~= 'number' then return end
+
+    -- convert back to the server's own handle
+    local vehicle = NetworkGetEntityFromNetworkId(netId)
+    if vehicle == 0 or not DoesEntityExist(vehicle) then return end
+
+    -- only the driver may lock it (checked on the server, not trusted from the client)
+    if GetPedInVehicleSeat(vehicle, -1) ~= GetPlayerPed(src) then return end
+
+    SetVehicleDoorsLocked(vehicle, 2) -- 2 = locked
+end)
+```
+
+On a client, a network ID is not always in scope either. Check it with `NetworkDoesEntityExistWithNetworkId(netId)` before converting it.
+
+--- deeper Quick reference: conversion natives
+- Player index to server ID: `GetPlayerServerId(player)` (client)
+- Server ID to player index: `GetPlayerFromServerId(serverId)` (client)
+- Player to ped: `GetPlayerPed(player)` on the client, `GetPlayerPed(source)` on the server
+- Ped to player index: `NetworkGetPlayerIndexFromPed(ped)` (client)
+- Entity to network ID: `NetworkGetNetworkIdFromEntity(entity)` (both)
+- Network ID to entity: `NetworkGetEntityFromNetworkId(netId)` (both)
+- The older aliases `PedToNet`, `NetToVeh` and friends do the same thing.
+
+--- framework
+Frameworks use the server ID too: `QBCore.Functions.GetPlayer(source)` and `ESX.GetPlayerFromId(source)` both take the server ID. The player's permanent identity (their license) is a different thing again; you get it on the server with `GetPlayerIdentifierByType(source, 'license')`.
+
+--- task Print your IDs
+1. Add a client command `/myid` that prints `PlayerId()` and `GetPlayerServerId(PlayerId())` to chat.
+2. Ask a friend to join and run it too. Compare: server IDs differ per player, and your local indexes may not match theirs.
+3. Add the `/lock` example. Lock a car as the driver, then try it as a passenger and confirm the server refuses.
+
+--- quiz
+? You need to tell the server which vehicle the player is in. What do you send?
+- The entity handle from GetVehiclePedIsIn
++ The network ID from NetworkGetNetworkIdFromEntity
+- The vehicle's plate text
+- The player index
+> Entity handles are local to each machine. Network IDs mean the same thing everywhere.
+
+? In a server event handler, what kind of ID is `source`?
+- A player index from 0 to 128
++ The player's server ID
+- The player's ped
+- Their license identifier
+> `source` is the server ID of the player who triggered the event.
+
+? On a client, `GetPlayerFromServerId(12)` returns -1. Why?
+- Server ID 12 is the console
++ That player is not in scope on this client right now
+- The function only works on the server
+- The player is dead
+> A player connected to the server is not always known to every client, for example when they are far away.
+
+=== state-bags | Networking | State bags | 12
+docs: State Bags | https://docs.fivem.net/docs/scripting-manual/networking/state-bags/
+docs: AddStateBagChangeHandler | https://docs.fivem.net/natives/?_0x5BA35AAF
+--- summary
+State bags attach key/value data to players, entities, or the whole server, and sync it automatically.
+
+--- section The three kinds of state
+A **state bag** is a little table of values attached to something, which FiveM keeps in sync between server and clients for you.
+
+- **Entity state:** `Entity(vehicle).state` attached to a car, ped or object.
+- **Player state:** `Player(source).state` on the server, `LocalPlayer.state` for yourself on the client.
+- **Global state:** `GlobalState`, one bag for the whole server. Set by the server, readable by every client.
+
+```lua file=server.lua
+-- server: set values (server-set state is replicated by default)
+GlobalState.weatherLocked = true
+
+RegisterCommand('duty', function(source)
+    if source == 0 then return end -- the console has no player state
+    local state = Player(source).state
+    local onDuty = not state.onDuty
+    state:set('onDuty', onDuty, true) -- true = replicate to clients
+    print(GetPlayerName(source) .. ' duty: ' .. tostring(onDuty))
+end, true) -- restricted: needs the command.duty ACE
+```
+
+```lua file=client.lua
+-- client: read values
+RegisterCommand('amionduty', function()
+    TriggerEvent('chat:addMessage', {
+        args = { 'Duty', tostring(LocalPlayer.state.onDuty) }
+    })
+    print('weather locked?', GlobalState.weatherLocked)
+end, false)
+```
+
+--- section Replication rules
+By default, state set **by the server is replicated** to clients, and state set **by a client is not**. You can override this per value with `:set(key, value, replicated)`:
+
+```lua file=server.lua
+-- keep a value on the server only
+Entity(vehicle).state:set('clone', 600, false)
+```
+
+```lua file=client.lua
+-- tell the server about something (only works on entities this client owns)
+Entity(enemy).state:set('taskAck', 'guard', true)
+```
+
+--- section Shallow means shallow
+Each read gives you a fresh copy, and only a **direct** assignment is sent back. Changing a value inside a nested table does nothing.
+
+```lua file=server.lua
+-- will NOT replicate: you changed a copy
+Entity(vehicle).state.tuning.color = 'red'
+
+-- slow: deserializes the whole tuning table twice
+local a = Entity(vehicle).state.tuning.color
+local b = Entity(vehicle).state.tuning.wheels
+
+-- better: use flat keys
+Entity(vehicle).state['tuning:color'] = 'red'
+```
+
+--- section Reacting to changes
+`AddStateBagChangeHandler(key, bagFilter, handler)` runs a function every time a key changes. The handler receives `bagName, key, value, reserved, replicated`. Use `GetPlayerFromStateBagName` or `GetEntityFromStateBagName` to turn the bag name back into something useful. Careful: on the server `GetPlayerFromStateBagName` gives the player's server ID, but on the client it gives the local player handle (the kind `PlayerId()` returns).
+
+```lua file=client.lua
+AddStateBagChangeHandler('onDuty', nil, function(bagName, key, value)
+    -- on the client this is a player handle, so compare it with PlayerId()
+    local player = GetPlayerFromStateBagName(bagName)
+    if player ~= PlayerId() then return end -- only react to MY duty changing
+
+    TriggerEvent('chat:addMessage', {
+        args = { 'Duty', value and 'You are now on duty.' or 'You are now off duty.' }
+    })
+end)
+```
+
+While the handler runs, the bag still holds the *old* value; the new one is the `value` argument.
+
+--- section Who may write state
+By default, **player state can be written by that player and the server**, entity state by the entity's owner and the server, and global state only by the server.
+
+!! That default means a cheater can write to their own player state. Never use client-writable state for permissions, money or jobs without checking it on the server. To make every state bag server-only, set the `sv_stateBagStrictMode` convar to `true` in `server.cfg`.
+
+```cfg file=server.cfg
+setr sv_stateBagStrictMode true
+```
+
+--- deeper When to use state bags vs events
+- Use a **state bag** for a *current value* that late joiners should also see: is this car's engine broken, is this player on duty, is the bank closed.
+- Use an **event** for a *one-off action*: show this notification, play this sound, open this menu.
+- Changing a state bag every frame is expensive. Set it when the value actually changes.
+
+--- framework
+QBCore and ESX store player data in their own objects, but many modern scripts (ox_inventory, qbx_core, pma-voice) use state bags heavily. For example, pma-voice keeps the player's radio channel in player state, which is why other resources can read it without calling pma-voice directly.
+
+--- task Build a duty toggle
+1. Add the server `/duty` command and the client change handler to a test resource.
+2. Give yourself the ACE: `add_ace group.admin command.duty allow` in `server.cfg` (you need to be in `group.admin`).
+3. Run `/duty` a few times and watch the chat messages.
+4. Restart only the client side by reconnecting, then run `/amionduty`: the value survives because the server owns it.
+
+--- quiz
+? Why does `Entity(veh).state.tuning.color = 'red'` not replicate?
+- Entity state only accepts numbers
++ State bags are shallow: you modified a copy, not the bag
+- Only the server can write entity state
+- The key name is too long
+> Every read returns a copy. Only a direct set like `state['tuning:color'] = 'red'` is written back.
+
+? Who can write to `GlobalState` by default?
+- Any client
+- The client who owns the most entities
++ The server
+- Nobody, it is read-only
+> Global state is server-set and client-read.
+
+? How do you stop clients from writing to any state bag?
+- Use AddEventHandler instead
++ Set sv_stateBagStrictMode to true
+- Add lua54 'yes'
+- Call CancelEvent in a change handler
+> With strict mode on, only the server can modify state bags. Change handlers cannot reject changes.
+
+=== events | Events | Working with events | 16
+docs: Working with events | https://docs.fivem.net/docs/scripting-manual/working-with-events/
+docs: Listening for events | https://docs.fivem.net/docs/scripting-manual/working-with-events/listening-for-events/
+docs: Triggering events | https://docs.fivem.net/docs/scripting-manual/working-with-events/triggering-events/
+docs: Canceling events | https://docs.fivem.net/docs/scripting-manual/working-with-events/canceling-events/
+--- summary
+Events are how resources and machines talk. Learn to listen, register network events, trigger across client and server, and cancel.
+
+--- section What an event is
+An **event** is a named message with optional values attached. One script *triggers* it, any number of scripts *listen* for it. Events are how a client tells the server "I pressed the shop button", and how the server tells a client "show this message".
+
+- **Client events** can only be *listened for* in client scripts, but can be *triggered* from client or server.
+- **Server events** can only be *listened for* in server scripts, but can be *triggered* from server or client.
+
+--- section Listening
+`AddEventHandler` listens for an event triggered **on the same side** (client to client, server to server).
+
+```lua file=client.lua
+AddEventHandler('myresource:doorOpened', function(doorName, byPlayer)
+    print(doorName .. ' was opened')
+end)
+```
+
+To accept an event **from the other side** (client to server or server to client), register it as a network event. The modern way is `RegisterNetEvent` with the handler passed straight in:
+
+```lua file=server.lua
+RegisterNetEvent('myresource:buyItem', function(itemName)
+    local src = source -- the server ID of the player who sent it
+    print(GetPlayerName(src) .. ' wants to buy ' .. tostring(itemName))
+end)
+```
+
+! `RegisterNetEvent('name', handler)` is just shorthand for `RegisterNetEvent('name')` followed by `AddEventHandler('name', handler)`. Registering only marks the event as allowed over the network; it does **not** block the same side from triggering it.
+
+--- section Save source right away
+On the server, the global `source` holds the player who triggered the event, but it is only guaranteed during the first part of the handler. After a `Wait` (or any async work) it is reset. Copy it into a local first.
+
+```lua file=server.lua
+RegisterNetEvent('myresource:slowThing', function()
+    local src = source -- copy it now
+
+    Wait(2000)          -- source is no longer reliable after this
+
+    TriggerClientEvent('chat:addMessage', src, { args = { 'Done!' } })
+end)
+```
+
+--- section Triggering
+| You are in | You want to reach | Use |
+| --- | --- | --- |
+| Client | Same client | `TriggerEvent(name, ...)` |
+| Server | Same server | `TriggerEvent(name, ...)` |
+| Client | Server | `TriggerServerEvent(name, ...)` |
+| Server | One client | `TriggerClientEvent(name, playerId, ...)` |
+| Server | Every client | `TriggerClientEvent(name, -1, ...)` |
+
+For large payloads (several KB or more), use the **latent** versions. They send data gradually at a rate in bytes per second, so they do not block the network channel. A `bps` of `0` or `-1` uses the default 25000.
+
+```lua file=server.lua
+-- send a big table to one player at 50 KB/s
+TriggerLatentClientEvent('myresource:bigData', playerId, 50000, bigTable)
+```
+
+```lua file=client.lua
+TriggerLatentServerEvent('myresource:uploadLog', 0, longText)
+```
+
+--- section A complete example: /report
+A player sends a report; the server checks it and forwards it to every staff member.
+
+```lua file=client.lua
+RegisterCommand('report', function(source, args)
+    local message = table.concat(args, ' ')
+    if message == '' then
+        TriggerEvent('chat:addMessage', { args = { 'Usage', '/report your message' } })
+        return
+    end
+    TriggerServerEvent('report:send', message)
+end, false)
+
+RegisterNetEvent('report:show', function(senderName, senderId, message)
+    TriggerEvent('chat:addMessage', {
+        color = { 255, 120, 80 },
+        multiline = true,
+        args = { ('REPORT from %s [%d]'):format(senderName, senderId), message }
+    })
+end)
+```
+
+```lua file=server.lua
+local lastReport = {}
+
+RegisterNetEvent('report:send', function(message)
+    local src = source
+
+    -- never trust the client: check type and length
+    if type(message) ~= 'string' or #message == 0 or #message > 200 then return end
+
+    -- simple cooldown: one report every 30 seconds
+    local now = os.time()
+    if lastReport[src] and now - lastReport[src] < 30 then return end
+    lastReport[src] = now
+
+    local name = GetPlayerName(src)
+    for _, playerId in ipairs(GetPlayers()) do
+        if IsPlayerAceAllowed(playerId, 'report.view') then
+            TriggerClientEvent('report:show', playerId, name, src, message)
+        end
+    end
+end)
+
+AddEventHandler('playerDropped', function()
+    lastReport[source] = nil
+end)
+```
+
+```cfg file=server.cfg
+add_ace group.admin report.view allow
+```
+
+--- section Canceling events
+Inside a handler you can call `CancelEvent()`. The resource that triggered the event can then check `WasEventCanceled()`, and in Lua `TriggerEvent` itself returns true when it was canceled. Canceling does **not** stop other handlers from running, and it only works for **local** events (not ones from across the network).
+
+```lua file=server.lua
+AddEventHandler('myresource:beforeSpawn', function(model)
+    if model == 'rhino' then
+        CancelEvent() -- no tanks today
+    end
+end)
+
+if TriggerEvent('myresource:beforeSpawn', 'rhino') then
+    print('Another script canceled the spawn')
+end
+```
+
+--- deeper Built-in events you will use
+- `playerJoining` and `playerDropped` (server): a player connected or left. In `playerDropped`, clean up any tables keyed by `source`.
+- `playerConnecting` (server): during connection, with deferrals for queue and whitelist checks.
+- `onResourceStart` and `onResourceStop` (both): the first argument is the resource name. Compare it with `GetCurrentResourceName()` to run setup or cleanup for your own resource.
+- `chat:addMessage` (client): print to the chat box.
+
+--- deeper C# and JavaScript
+In JS, `on(name, fn)` listens locally, `onNet(name, fn)` listens over the network, `emit` triggers locally and `emitNet(name, ...)` triggers on the server (or `emitNet(name, playerId, ...)` from the server to a client). C# does not need event registration; it reads `source` through the `[FromSource] Player source` parameter attribute.
+
+--- framework
+QBCore and ESX use the same events. Their names usually follow `resource:side:action`, like `QBCore:Server:OnPlayerLoaded` or `esx:playerLoaded`. When you see `TriggerServerEvent('qb-shops:server:buy', ...)` in a script, that is exactly the pattern from this lesson, and it needs the same server-side checks.
+
+--- task Build the /report system
+1. Put the client and server code above in a resource called `reports`.
+2. Add the `add_ace` line to `server.cfg` and make sure your own license is in `group.admin`.
+3. Restart the server (ACE changes in `server.cfg` load on boot), then `/report test` in game.
+4. Spam `/report` and confirm the 30 second cooldown blocks the extra ones.
+5. Bonus: send the reporter a confirmation message using `TriggerClientEvent('chat:addMessage', src, ...)`.
+
+--- quiz
+? A client script triggers `TriggerServerEvent('bank:deposit', 100)`. How must the server listen for it?
+- AddEventHandler('bank:deposit', ...) alone
++ RegisterNetEvent('bank:deposit', function(amount) ... end)
+- RegisterCommand('bank:deposit', ...)
+- TriggerEvent('bank:deposit')
+> Events coming from the other side must be registered as network events.
+
+? Why copy `local src = source` at the top of a server event handler?
+- Because source is a string
++ Because source can be reset after a Wait or async call
+- To make the code faster
+- Because source is nil until you copy it
+> The global source is only guaranteed during the first synchronous part of the handler.
+
+? You need to send a table of several hundred KB from the server to one client. What should you use?
+- TriggerClientEvent with -1
++ TriggerLatentClientEvent with a bps value
+- A state bag that changes every frame
+- TriggerEvent
+> Latent events trickle large payloads without blocking the client's network channel and timing them out.
+
+=== nui | NUI | Web interfaces with NUI | 18
+docs: User interfaces with NUI | https://docs.fivem.net/docs/scripting-manual/nui-development/
+docs: Fullscreen NUI | https://docs.fivem.net/docs/scripting-manual/nui-development/full-screen-nui/
+docs: NUI callbacks | https://docs.fivem.net/docs/scripting-manual/nui-development/nui-callbacks/
+docs: Loading screens | https://docs.fivem.net/docs/scripting-manual/nui-development/loading-screens/
+docs: Direct-rendered UI (DUI) | https://docs.fivem.net/docs/scripting-manual/nui-development/dui/
+--- summary
+Build in-game menus with HTML, CSS and JavaScript: open them from Lua, send data both ways, and handle focus safely.
+
+--- section What NUI is
+**NUI** ("new UI") lets a resource show a web page over the game, rendered by an embedded Chromium. Anything you can build for a browser (plain HTML, React, Vue, even WebGL) can become an in-game menu, HUD or phone.
+
+Data flows in two directions:
+
+- **Lua to page:** `SendNUIMessage(table)` in a client script; the page receives it with a `message` event listener.
+- **Page to Lua:** the page calls `fetch('https://resource-name/callbackName', ...)`; Lua answers with `RegisterNuiCallback`.
+
+--- section Step 1: the manifest
+Set one `ui_page` and list **every** file the page needs in `files`, or the client never downloads them.
+
+```lua file=fxmanifest.lua
+fx_version 'cerulean'
+game 'gta5'
+
+client_script 'client.lua'
+
+ui_page 'html/index.html'
+
+files {
+    'html/index.html',
+    'html/style.css',
+    'html/app.js'
+}
+```
+
+--- section Step 2: open and close from Lua
+`SetNuiFocus(hasFocus, hasCursor)` gives the page the keyboard and the mouse cursor. Always give it back when the menu closes, or the player is stuck with a cursor.
+
+```lua file=client.lua
+local isOpen = false
+
+local function setMenu(open)
+    isOpen = open
+    SetNuiFocus(open, open)
+    SendNUIMessage({ type = open and 'open' or 'close' })
+end
+
+RegisterCommand('menu', function()
+    setMenu(not isOpen)
+end, false)
+
+-- the page asks us to close (Escape key or close button)
+RegisterNuiCallback('close', function(data, cb)
+    setMenu(false)
+    cb({ ok = true }) -- ALWAYS answer, or the page's fetch times out
+end)
+
+-- the page sends the button the player picked
+RegisterNuiCallback('choose', function(data, cb)
+    setMenu(false)
+    TriggerEvent('chat:addMessage', { args = { 'Menu', 'You picked ' .. tostring(data.option) } })
+    cb({ ok = true })
+end)
+
+-- never leave focus stuck if the resource is restarted while open
+AddEventHandler('onResourceStop', function(resourceName)
+    if resourceName == GetCurrentResourceName() then
+        SetNuiFocus(false, false)
+    end
+end)
+```
+
+--- section Step 3: the page
+The page starts hidden, listens for messages from Lua, and calls back with `fetch`. `GetParentResourceName()` is a function FiveM provides inside NUI pages; it returns your resource name so you never hard-code it.
+
+```html file=html/index.html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="menu" class="hidden">
+        <h1>City Services</h1>
+        <button data-option="taxi">Call a taxi</button>
+        <button data-option="mechanic">Call a mechanic</button>
+        <button id="close">Close</button>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
+```
+
+```js file=html/app.js
+const menu = document.getElementById('menu');
+
+function post(name, data = {}) {
+    return fetch(`https://${GetParentResourceName()}/${name}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        body: JSON.stringify(data)
+    }).then(resp => resp.json());
+}
+
+// messages from Lua (SendNUIMessage)
+window.addEventListener('message', (event) => {
+    if (event.data.type === 'open') menu.classList.remove('hidden');
+    if (event.data.type === 'close') menu.classList.add('hidden');
+});
+
+document.querySelectorAll('[data-option]').forEach((button) => {
+    button.addEventListener('click', () => post('choose', { option: button.dataset.option }));
+});
+
+document.getElementById('close').addEventListener('click', () => post('close'));
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') post('close');
+});
+```
+
+```css file=html/style.css
+body { margin: 0; font-family: sans-serif; background: transparent; }
+.hidden { display: none !important; }
+#menu {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 280px; padding: 20px; border-radius: 10px;
+    background: rgba(15, 20, 28, 0.95); color: #fff;
+    display: flex; flex-direction: column; gap: 8px;
+}
+#menu button { padding: 10px; border: 0; border-radius: 6px; cursor: pointer; }
+```
+
+! Keep the page background `transparent`, or a white rectangle will cover the game.
+
+--- section Callbacks: the rules
+- Data both ways **must be JSON-encodable** (no functions, no entity handles that mean nothing on the page).
+- **Always call `cb`**, even with just `{ ok = true }`. If you do not, the page's `fetch` hangs, times out and throws an error.
+- POST bodies arrive in Lua already decoded as a table (`data.option` above), and whatever you pass to `cb` arrives in the page as JSON.
+
+--- section Referencing files and debugging
+Inside a page you can load files from any resource with the `https://cfx-nui-resourcename/path` scheme (the old `nui://` scheme is no longer a secure context). The developer tools live at `http://localhost:13172/` while the game is running, or `nui_devTools` in <kbd>F8</kbd>. NUI focus is a stack: the most recently focused resource sits on top, and there is no click-through to resources underneath.
+
+--- section NUI callback strict mode
+Without strict mode, **any** resource's NUI page could call your callbacks. If a callback hands out sensitive data or admin actions, a malicious resource could abuse it. Strict mode means only your own resource's page can call your callbacks.
+
+| Platform | Default | To change |
+| --- | --- | --- |
+| FiveM for GTAV Enhanced | Enabled | `nui_callback_strict_mode 'false'` in the manifest to opt out |
+| FiveM Legacy | Disabled | `nui_callback_strict_mode 'true'` in the manifest to opt in |
+
+If two resources really must share data, expose an **export** in the provider resource and add a small proxy NUI callback in the consumer that calls the export.
+
+--- deeper Loading screens
+A loading screen is a special NUI page shown while players join. Declare it with `loadscreen 'index.html'` (and list the file under `file` or `files`). Add `loadscreen_cursor 'yes'` to show the cursor. Server scripts can pass data to it with `deferrals.handover` in `playerConnecting`; the page reads it from `window.nuiHandoverData`.
+
+```lua file=server.lua
+AddEventHandler('playerConnecting', function(_, _, deferrals)
+    local source = source
+    deferrals.handover({ name = GetPlayerName(source) })
+end)
+```
+
+```html file=loadscreen.html
+<progress id="bar" value="0" max="1"></progress>
+<script>
+window.addEventListener('message', (event) => {
+    if (event.data.eventName !== 'loadProgress') return;
+    document.getElementById('bar').value = event.data.loadFraction;
+});
+</script>
+```
+
+Use `innerText` (not `innerHTML`) when you show player names: names are user input and could contain HTML. By default the screen closes when `ShutdownLoadingScreen` runs; with `loadscreen_manual_shutdown 'yes'` you control it with `ShutdownLoadingScreenNui`.
+
+--- deeper DUI: web pages on in-game surfaces
+**DUI** renders a web page to a texture instead of the screen, for TV screens, cinema walls or billboards. The key natives are `CreateDui`, `GetDuiHandle`, `CreateRuntimeTextureFromDuiHandle`, `SetDuiUrl`, `SendDuiMessage` and `DestroyDui`. You can then draw the texture with `DrawSprite` or put it on a render target.
+
+--- framework
+Phones, inventories and menus on RP servers (qb-inventory, ox_lib menus, phone resources) are all NUI with this exact pattern. When a UI gets stuck open after a crash, the cause is almost always a missing `SetNuiFocus(false, false)`.
+
+--- task Build a services menu
+1. Create a resource `servicesmenu` with the manifest, `client.lua`, and the three `html` files above.
+2. `refresh; ensure servicesmenu`, then type `/menu` in game. Click a button and press Escape.
+3. Open `http://localhost:13172/` in your browser, inspect the page, and find your buttons.
+4. Comment out `cb({ ok = true })` in the `choose` callback, restart, click a button, and watch the error in dev tools. Then put it back.
+
+--- quiz
+? A NUI callback handler never calls `cb`. What happens?
+- Nothing, cb is optional
++ The page's fetch request hangs, times out and errors
+- The game crashes
+- Lua retries the callback
+> The docs say you must always return data through the callback, even just `{ ok = true }`.
+
+? How does a client script send data to its NUI page?
+- TriggerClientEvent
++ SendNUIMessage, received by a 'message' event listener in the page
+- fetch() from Lua
+- RegisterNuiCallback
+> SendNUIMessage posts a message to the page. RegisterNuiCallback handles the opposite direction.
+
+? On FiveM for GTAV Enhanced, NUI callback strict mode is on by default. What does it do?
+- Blocks all fetch calls
++ Only the resource's own NUI page can call its callbacks
+- Requires HTTPS certificates
+- Disables SendNUIMessage
+> Strict mode stops other resources' pages from calling your callbacks. Use exports for deliberate sharing.
+
+=== voice | Voice | Voice chat | 12
+docs: Voice | https://docs.fivem.net/docs/scripting-manual/voice/
+docs: Legacy vs Enhanced | https://docs.fivem.net/docs/developers/legacy-vs-enhanced/
+--- summary
+How FiveM voice works: Mumble proximity and submixes on Legacy, and the new server-owned voice channel API on FiveM for GTAV Enhanced.
+
+--- section Two voice systems
+- **FiveM Legacy** uses a built-in **Mumble** client for voice. Its natives (`Mumble...`) run on the client.
+- **FiveM for GTAV Enhanced** ships a new voice system with better quality on bad connections, noise cancellation and echo cancellation. Mumble is **deprecated** there and will be removed; the new natives run on the **server** only.
+
+! Most RP servers use a voice resource such as **pma-voice**, which already handles proximity, radios and phone calls. If you run one, do not add your own channel code on top of it; use its exports instead. The examples below are for learning how it works underneath.
+
+--- section Mumble: proximity and settings
+`MumbleSetTalkerProximity` sets how far your voice carries. Call it on the client. (`NetworkSetTalkerProximity` also exists on FiveM; it calls the original game native before setting Mumble's distance.)
+
+```lua file=client.lua
+-- whisper / normal / shout, cycled with a command
+local ranges = { 3.0, 8.0, 15.0 }
+local current = 2
+
+RegisterCommand('voicerange', function()
+    current = current % #ranges + 1
+    MumbleSetTalkerProximity(ranges[current])
+    TriggerEvent('chat:addMessage', { args = { 'Voice', ('Range: %.0fm'):format(ranges[current]) } })
+end, false)
+```
+
+Players can tune voice in <kbd>F8</kbd> with convars like `voice_inBitrate` (16000 to 128000, default 48000). On Legacy there are also `voice_use2dAudio`, `voice_useSendingRangeOnly` and `voice_useNativeAudio`; the last one must be `true` for submixes.
+
+--- section Submixes: a radio effect
+A **submix** applies audio effects to a player's voice, for example a crackly radio filter.
+
+```lua file=client.lua
+local radioSubmix = CreateAudioSubmix('myRadio') -- returns the existing one if it already exists
+
+if radioSubmix ~= -1 then
+    SetAudioSubmixEffectRadioFx(radioSubmix, 1)                 -- radio FX in effect slot 1
+    SetAudioSubmixEffectParamInt(radioSubmix, 1, `default`, 1)
+    SetAudioSubmixEffectParamFloat(radioSubmix, 1, `freq_low`, 300.0)
+    SetAudioSubmixEffectParamFloat(radioSubmix, 1, `freq_hi`, 6000.0)
+    AddAudioSubmixOutput(radioSubmix, 1)
+end
+
+-- apply it to one player (by server ID); pass -1 to remove it again
+local function setRadioFilter(serverId, enabled)
+    MumbleSetSubmixForServerId(serverId, enabled and radioSubmix or -1)
+end
+```
+
+--- section Mumble channels (and the catch)
+`MumbleSetVoiceChannel(id)` moves a client into a voice channel, which is one way to build a radio. The docs warn that this **removes the player from the default Root channel, so normal proximity chat stops working** for them. That is why pma-voice uses voice targets instead. Channels can be listened to with `MumbleAddVoiceChannelListen(id)` and left with `MumbleRemoveVoiceChannelListen(id)`. The docs' full Mumble radio example syncs channel members from the server with events.
+
+--- section The new voice API (Enhanced)
+On FiveM for GTAV Enhanced, enable the built-in voice server in `server.cfg`, then manage everything from server scripts. The server owns membership, mute and deaf state, so clients cannot sneak into a channel.
+
+```cfg file=server.cfg
+voice_internal
+
+# only if you must keep old Mumble scripts working (less secure):
+# setr sv_mumble true
+```
+
+```lua file=server.lua
+local radioChannels = {} -- radio number -> voice channel ID
+
+local function getOrCreateChannel(radio)
+    if not radioChannels[radio] then
+        radioChannels[radio] = CreateVoiceChannel(0, 0.0) -- mode 0 = non-spatial (radio)
+    end
+    return radioChannels[radio]
+end
+
+local function leaveAllChannels(playerId)
+    for _, channelId in pairs(radioChannels) do
+        RemovePlayerFromVoiceChannel(channelId, playerId)
+    end
+end
+
+RegisterCommand('joinradio', function(source, args)
+    local radio = tonumber(args[1])
+    if not radio then return end
+    leaveAllChannels(source)
+    AddPlayerToVoiceChannel(getOrCreateChannel(radio), source)
+end, false)
+
+RegisterCommand('leaveradio', function(source)
+    leaveAllChannels(source)
+end, false)
+
+-- players are removed from every channel automatically when they disconnect
+```
+
+| Mode | Name | Behaviour |
+| --- | --- | --- |
+| 0 | Non-spatial | 2D channel, everyone in it hears everyone (radios, phone calls) |
+| 1 | Spatial | 3D, hears speakers within `maxDistance` |
+| 2 | Custom | No automatic receivers yet |
+| 3 | Temporary | Like spatial, deleted when the last player leaves |
+
+Other server natives: `DeleteVoiceChannel`, `SetPlayerMutedInVoiceChannel` (can hear, cannot speak) and `SetPlayerDeafInVoiceChannel` (can speak, cannot hear). A pure listener is added, then muted.
+
+!! Turning on `sv_mumble` for old scripts lets any client join any Mumble channel and listen to any conversation. Prefer migrating to the server API.
+
+--- deeper Mumble to Enhanced cheat sheet
+| Deprecated (client) | Replacement (server) |
+| --- | --- |
+| `MumbleCreateChannel(id)` | `CreateVoiceChannel(mode, maxDistance)` |
+| `MumbleSetVoiceChannel(id)` | `AddPlayerToVoiceChannel(channelID, clientID)` |
+| Leaving a channel | `RemovePlayerFromVoiceChannel(channelID, clientID)` |
+| Implicit cleanup | `DeleteVoiceChannel(channelID)` |
+| Client mute logic | `SetPlayerMutedInVoiceChannel(channelID, clientID, muted)` |
+| Client listen logic | `SetPlayerDeafInVoiceChannel(channelID, clientID, deaf)` |
+
+These Enhanced natives come from the Voice guide and may not appear in the Legacy native list yet.
+
+--- framework
+On QBCore and ESX servers, radios and phones normally call pma-voice exports (for example setting a radio channel) rather than Mumble natives directly. Check your voice resource's documentation before writing voice code.
+
+--- task Try voice range
+1. On a **test** server (or with your voice resource stopped), add the `/voicerange` command to a resource.
+2. Join with a friend, stand apart, and cycle the range while one of you talks.
+3. If you are on FiveM for GTAV Enhanced, add `voice_internal` to the test server's config, add the radio commands, and both `/joinradio 1` from opposite ends of the map.
+
+--- quiz
+? On FiveM for GTAV Enhanced, where do the new voice channel natives run?
+- On the client, like Mumble
++ On the server only
+- In NUI pages
+- In both client and server
+> The server owns channel membership, mute and deaf state, which removes the old client-side security problems.
+
+? What happens when a client calls `MumbleSetVoiceChannel` to join a radio channel?
+- Nothing, it only creates the channel
++ They leave the Root channel, so normal proximity chat stops working for them
+- Everyone on the server hears them
+- They are muted
+> The docs warn about this. pma-voice avoids it by using voice targets.
+
+? What is an audio submix used for?
+- Recording voice to a file
++ Applying effects such as a radio filter to a player's voice
+- Changing the player's microphone
+- Mixing NUI sounds
+> Submixes route audio through effects like the radio FX shown in the docs.

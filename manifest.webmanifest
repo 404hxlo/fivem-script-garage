@@ -1,0 +1,22 @@
+{
+  "id": "./",
+  "name": "FiveM Script Garage",
+  "short_name": "Script Garage",
+  "description": "Learn FiveM Lua scripting from the Cfx.re docs: 14 lessons with quizzes, a resource generator, a native cheat sheet and a backdoor scanner.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#12110f",
+  "theme_color": "#181613",
+  "categories": ["education", "developer"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Resource generator", "url": "./#generator" },
+    { "name": "Native cheat sheet", "url": "./#natives" },
+    { "name": "Backdoor scanner", "url": "./#security" }
+  ]
+}
